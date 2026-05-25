@@ -16,3 +16,32 @@ jobs:
     uses: mxr/workflows/.github/workflows/github-release.yml@440bfbaaa50585f30da0926ae20f10a7727a3b7f # v0.1.2
     permissions:
       contents: write
+
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
+
+    - name: Setup Node
+      uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0 # zizmor: ignore[cache-poisoning]
+      with:
+        node-version-file: package.json
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Pull Vercel environment
+      run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+    - name: Build
+      run: npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+    - name: Deploy
+      run: npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
