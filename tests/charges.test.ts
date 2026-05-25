@@ -1,3 +1,4 @@
+import { compressToEncodedURIComponent } from "lz-string";
 import { describe, expect, it } from "vitest";
 import { computeCharges } from "../lib/allocate";
 import { DEFAULT_BUDGET, makeId, normalizeBudget, validateBudget } from "../lib/budget";
@@ -335,6 +336,32 @@ describe("serialize round-trips", () => {
     expect(parseBudgetUrl("")).toBeNull();
     expect(parseBudgetUrl("!!!not-valid!!!")).toBeNull();
     expect(parseBudgetJson("not json")).toBeNull();
+  });
+
+  it("preserves orphan references and offsets through the packed encoding", () => {
+    // commercial type, the "p2" policy and "ghost" owner are not in their lookup lists, so the
+    // packed form stores them as string/-1 fallbacks rather than indices.
+    const budget = makeBudget({
+      unitTypes: ["residential"],
+      categories: ["general"],
+      owners: [owner("o1")],
+      units: [unit("u1", "commercial", 100, "ghost")],
+      policies: [{ id: "p", name: "standard", rules: [{ unitTypes: ["commercial"], weight: 100, method: "common_interest" }] }],
+      expenses: [{ id: "e", name: "exp", category: "misc", amount: 100, policyId: "p2" }],
+      adjustments: { inflationPct: 5, reservePct: 10, offsets: [{ unitType: "commercial", pct: -5 }], incomeOffset: 200 },
+    });
+    const parsed = parseBudgetUrl(serializeBudgetUrl(budget)) as Budget;
+    expect(parsed.units[0].type).toBe("commercial");
+    expect(parsed.units[0].ownerId).toBe("");
+    expect(parsed.expenses[0].category).toBe("misc");
+    expect(parsed.expenses[0].policyId).toBe("");
+    expect(parsed.adjustments.offsets).toEqual([{ unitType: "commercial", pct: -5 }]);
+    expect(parsed.adjustments.incomeOffset).toBe(200);
+  });
+
+  it("still parses older links that stored the full budget object", () => {
+    const legacy = compressToEncodedURIComponent(JSON.stringify(DEFAULT_BUDGET));
+    expect(parseBudgetUrl(legacy)).toEqual(DEFAULT_BUDGET);
   });
 });
 
