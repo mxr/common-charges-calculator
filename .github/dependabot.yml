@@ -1,0 +1,43 @@
+version: 2
+updates:
+- package-ecosystem: npm
+  directory: /
+  schedule:
+    interval: weekly
+  ignore:
+  # Don't update this so it doesn't surpass the node engine version
+  - dependency-name: '@types/node'
+    update-types:
+    - version-update:semver-major
+  groups:
+    app:
+      patterns:
+      - next
+      - react
+      - react-dom
+    lint-and-types:
+      patterns:
+      - '@biomejs/biome'
+      - typescript
+      - '@types/*'
+    test:
+      patterns:
+      - vitest
+      - '@vitest/*'
+    styling:
+      patterns:
+      - tailwindcss
+      - '@tailwindcss/*'
+
+  cooldown:
+    default-days: 7
+- package-ecosystem: github-actions
+  directory: /
+  schedule:
+    interval: weekly
+  groups:
+    github-actions:
+      patterns:
+      - '*'
+  cooldown:
+    default-days: 7

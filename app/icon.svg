@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="28" fill="#f7f1e8" />
+  <!-- tree -->
+  <rect x="22" y="78" width="8" height="30" rx="2" fill="#7a5a3a" />
+  <circle cx="26" cy="66" r="20" fill="#6b9e6b" />
+  <!-- building -->
+  <rect x="48" y="24" width="60" height="84" rx="4" fill="#c9a888" stroke="#1b1a17" stroke-width="4" />
+  <!-- windows -->
+  <g fill="#1b1a17">
+    <rect x="56" y="34" width="10" height="10" rx="2" />
+    <rect x="73" y="34" width="10" height="10" rx="2" />
+    <rect x="90" y="34" width="10" height="10" rx="2" />
+    <rect x="56" y="52" width="10" height="10" rx="2" />
+    <rect x="73" y="52" width="10" height="10" rx="2" />
+    <rect x="90" y="52" width="10" height="10" rx="2" />
+    <rect x="56" y="70" width="10" height="10" rx="2" />
+    <rect x="90" y="70" width="10" height="10" rx="2" />
+  </g>
+  <!-- door -->
+  <rect x="72" y="86" width="12" height="22" rx="2" fill="#1b1a17" />
+  <!-- ground -->
+  <rect x="14" y="108" width="100" height="6" rx="3" fill="#cbb89c" />
+</svg>

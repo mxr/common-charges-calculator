@@ -1,0 +1,18 @@
+name: release
+
+on:
+  push:
+    tags:
+    - '**'
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    uses: mxr/workflows/.github/workflows/github-release.yml@440bfbaaa50585f30da0926ae20f10a7727a3b7f # v0.1.2
+    permissions:
+      contents: write
