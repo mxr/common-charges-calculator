@@ -29,6 +29,22 @@ const groupHeading = "text-xs font-semibold uppercase tracking-[0.25em] text-[#8
 const iconButton =
   "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#d8c7b5] text-[#5b5148] transition hover:-translate-y-0.5 hover:bg-[#f1e7db]";
 
+type ExpenseSortKey = "name" | "amount" | "split";
+
+const EXPENSE_SORT_LABELS: Record<ExpenseSortKey, string> = {
+  name: "Name",
+  amount: "Amount",
+  split: "Split",
+};
+
+type UnitSortKey = "label" | "ci" | "owner";
+
+const UNIT_SORT_LABELS: Record<UnitSortKey, string> = {
+  label: "Number",
+  ci: "Common interest",
+  owner: "Owner",
+};
+
 const iconProps = {
   viewBox: "0 0 24 24",
   fill: "none",
@@ -176,10 +192,32 @@ function HomeContent() {
   };
 
   const [dragCategory, setDragCategory] = useState<string | null>(null);
-  const [dragExpense, setDragExpense] = useState<{ id: string; category: string } | null>(null);
   const [dragOwner, setDragOwner] = useState<string | null>(null);
   const [dragPolicy, setDragPolicy] = useState<string | null>(null);
-  const [dragUnit, setDragUnit] = useState<string | null>(null);
+  // Per-category display sort. Absent = entry order. Clicking a key cycles asc -> desc -> off.
+  const [expenseSort, setExpenseSort] = useState<Record<string, { key: ExpenseSortKey; dir: "asc" | "desc" }>>({});
+  const cycleExpenseSort = (category: string, key: ExpenseSortKey) =>
+    setExpenseSort((prev) => {
+      const current = prev[category];
+      const next = { ...prev };
+      if (!current || current.key !== key) {
+        next[category] = { key, dir: "asc" };
+      } else if (current.dir === "asc") {
+        next[category] = { key, dir: "desc" };
+      } else {
+        delete next[category];
+      }
+      return next;
+    });
+  // Display sort for units in the "by type" view, applied within each type group. Absent = entry order.
+  const [unitSort, setUnitSort] = useState<{ key: UnitSortKey; dir: "asc" | "desc" } | null>(null);
+  const cycleUnitSort = (key: UnitSortKey) =>
+    setUnitSort((current) => {
+      if (!current || current.key !== key) {
+        return { key, dir: "asc" };
+      }
+      return current.dir === "asc" ? { key, dir: "desc" } : null;
+    });
 
   const toggleType = (key: string) =>
     setCollapsedTypes((prev) => {
@@ -229,8 +267,6 @@ function HomeContent() {
     patch((draft) => ({ ...draft, owners: moveItem(draft.owners, from, to, after) }));
   const movePolicy = (from: string, to: string, after: boolean) =>
     patch((draft) => ({ ...draft, policies: moveItem(draft.policies, from, to, after) }));
-  const moveUnit = (from: string, to: string, after: boolean) =>
-    patch((draft) => ({ ...draft, units: moveItem(draft.units, from, to, after) }));
 
   // True when the drag pointer is past the vertical midpoint of the hovered row (insert after, not before).
   const isAfterMidpoint = (event: React.DragEvent<HTMLElement>) => {
@@ -257,70 +293,9 @@ function HomeContent() {
     }));
   };
 
-  // Move an expense into `targetCategory`, placed before `beforeId` (or at the end of that
-  // category when omitted). Handles both in-category reorder and cross-category moves.
-  const moveExpenseTo = (expenseId: string, targetCategory: string, beforeId?: string) => {
-    if (expenseId === beforeId) {
-      return;
-    }
-    patch((draft) => {
-      const moved = draft.expenses.find((e) => e.id === expenseId);
-      if (!moved) {
-        return draft;
-      }
-      const updated = { ...moved, category: targetCategory };
-      const rest = draft.expenses.filter((e) => e.id !== expenseId);
-      if (beforeId) {
-        const index = rest.findIndex((e) => e.id === beforeId);
-        rest.splice(index < 0 ? rest.length : index, 0, updated);
-      } else {
-        const lastIndex = rest.reduce((acc, e, i) => (e.category === targetCategory ? i : acc), -1);
-        rest.splice(lastIndex + 1, 0, updated);
-      }
-      return { ...draft, expenses: rest };
-    });
-  };
-
   const renderUnitRow = (unit: Unit) => {
-    const reorderable = unitView === "type";
     return (
-      // biome-ignore lint/a11y/noStaticElementInteractions: native drag-and-drop reorder target
-      <div
-        key={unit.id}
-        data-unit={unit.id}
-        className={`grid gap-2 transition-opacity sm:items-center ${reorderable ? "sm:grid-cols-[auto_1.2fr_1fr_0.9fr_1.4fr_auto]" : "sm:grid-cols-[1.2fr_1fr_0.9fr_1.4fr_auto]"} ${dragUnit === unit.id ? "opacity-40" : ""}`}
-        onDragOver={
-          reorderable
-            ? (event) => {
-                if (dragUnit) {
-                  event.preventDefault();
-                  if (dragUnit !== unit.id) {
-                    moveUnit(dragUnit, unit.id, isAfterMidpoint(event));
-                  }
-                }
-              }
-            : undefined
-        }
-        onDrop={reorderable ? () => setDragUnit(null) : undefined}
-      >
-        {reorderable ? (
-          // biome-ignore lint/a11y/noStaticElementInteractions: drag handle
-          <span
-            draggable
-            onDragStart={(event) => {
-              setDragUnit(unit.id);
-              const row = (event.currentTarget as HTMLElement).closest("[data-unit]");
-              if (row) {
-                event.dataTransfer.setDragImage(row, 20, 16);
-              }
-            }}
-            onDragEnd={() => setDragUnit(null)}
-            className="cursor-grab select-none px-1 text-[#b3a392]"
-            title="Drag to reorder unit"
-          >
-            ☰
-          </span>
-        ) : null}
+      <div key={unit.id} className="grid gap-2 transition-opacity sm:grid-cols-[1.2fr_1fr_0.9fr_1.4fr_auto] sm:items-center">
         <input
           className={field}
           value={unit.label}
@@ -375,9 +350,26 @@ function HomeContent() {
     );
   };
 
+  const ownerNameById = new Map(budget.owners.map((owner) => [owner.id, owner.name]));
+  // Sort units within a type group. Only used in the "by type" view; "by owner" stays in entry order.
+  const sortUnits = (units: Unit[]): Unit[] => {
+    if (!unitSort) {
+      return units;
+    }
+    const factor = unitSort.dir === "asc" ? 1 : -1;
+    return [...units].sort((a, b) => {
+      if (unitSort.key === "ci") {
+        return (a.commonInterest - b.commonInterest) * factor;
+      }
+      const av = unitSort.key === "label" ? a.label : (ownerNameById.get(a.ownerId) ?? "");
+      const bv = unitSort.key === "label" ? b.label : (ownerNameById.get(b.ownerId) ?? "");
+      return av.localeCompare(bv) * factor;
+    });
+  };
+
   const unitGroups: { key: string; label: string; units: Unit[] }[] =
     unitView === "type"
-      ? budget.unitTypes.map((type) => ({ key: type, label: type, units: budget.units.filter((unit) => unit.type === type) }))
+      ? budget.unitTypes.map((type) => ({ key: type, label: type, units: sortUnits(budget.units.filter((unit) => unit.type === type)) }))
       : budget.owners.map((owner) => ({
           key: owner.id,
           label: owner.name,
@@ -393,6 +385,7 @@ function HomeContent() {
     unitsByOwner.set(charge.ownerId, list);
   }
   const expenseName = new Map(budget.expenses.map((expense) => [expense.id, expense.name || "(unnamed)"]));
+  const policyName = new Map(budget.policies.map((policy) => [policy.id, policy.name]));
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#f7f1e8]">
@@ -619,34 +612,16 @@ function HomeContent() {
           </div>
           {collapsedUnits ? null : (
             <>
-              <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-                <p className={sectionHint}>
-                  Common interests total{" "}
-                  <span className={Math.abs(ciSum - 100) <= 0.01 ? "font-semibold text-[#3f7a52]" : "font-semibold text-[#b44b43]"}>
-                    {formatCi(ciSum)}%
-                  </span>{" "}
-                  (should be as close to 100% as possible). Columns: label, type, common interest %, owner.
-                  {Math.abs(ciSum - 100) > 0.01 ? (
-                    <span className="font-semibold text-[#b44b43]"> Off from 100% - double-check the Unit definitions.</span>
-                  ) : null}
-                </p>
-                <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
-                  <button
-                    type="button"
-                    className={`px-3 py-1.5 ${unitView === "type" ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
-                    onClick={() => setUnitView("type")}
-                  >
-                    By type
-                  </button>
-                  <button
-                    type="button"
-                    className={`px-3 py-1.5 ${unitView === "owner" ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
-                    onClick={() => setUnitView("owner")}
-                  >
-                    By owner
-                  </button>
-                </div>
-              </div>
+              <p className={`${sectionHint} mt-1`}>
+                Common interests total{" "}
+                <span className={Math.abs(ciSum - 100) <= 0.01 ? "font-semibold text-[#3f7a52]" : "font-semibold text-[#b44b43]"}>
+                  {formatCi(ciSum)}%
+                </span>{" "}
+                (should be as close to 100% as possible). Columns: label, type, common interest %, owner.
+                {Math.abs(ciSum - 100) > 0.01 ? (
+                  <span className="font-semibold text-[#b44b43]"> Off from 100% - double-check the Unit definitions.</span>
+                ) : null}
+              </p>
               <div className="mt-4 rounded-2xl border border-[#f2e8dd] bg-[#fffaf3] p-4">
                 <button
                   type="button"
@@ -687,6 +662,49 @@ function HomeContent() {
                     </div>
                   </>
                 )}
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3">
+                <div className="flex items-center gap-2">
+                  <span className={groupHeading}>Grouping</span>
+                  <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                    <button
+                      type="button"
+                      className={`px-3 py-1.5 ${unitView === "type" ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                      onClick={() => setUnitView("type")}
+                    >
+                      By type
+                    </button>
+                    <button
+                      type="button"
+                      className={`px-3 py-1.5 ${unitView === "owner" ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                      onClick={() => setUnitView("owner")}
+                    >
+                      By owner
+                    </button>
+                  </div>
+                </div>
+                {unitView === "type" ? (
+                  <div className="flex items-center gap-2">
+                    <span className={groupHeading}>Sort by</span>
+                    <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                      {(["label", "ci", "owner"] as UnitSortKey[]).map((key) => {
+                        const active = unitSort?.key === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                            aria-label={`Sort units by ${UNIT_SORT_LABELS[key].toLowerCase()}${active ? ` (${unitSort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
+                            onClick={() => cycleUnitSort(key)}
+                          >
+                            {UNIT_SORT_LABELS[key]}
+                            {active ? (unitSort.dir === "asc" ? " ↑" : " ↓") : ""}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
               </div>
               <div className="mt-4 flex flex-col gap-5">
                 {unitGroups.map((group) => {
@@ -971,11 +989,23 @@ function HomeContent() {
             <>
               <p className={`${sectionHint} mt-1`}>
                 Grouped by category. Each line item is a per-year cost and a policy that decides how it is split. Drag the ☰ handle to
-                reorder line items or whole categories.
+                reorder categories, or sort the line items within a category by name, amount, or split.
               </p>
               <div className="mt-4 flex flex-col gap-5">
                 {expenseCategories.map((category) => {
-                  const items = budget.expenses.filter((expense) => expense.category === category);
+                  const sort = expenseSort[category];
+                  let items = budget.expenses.filter((expense) => expense.category === category);
+                  if (sort) {
+                    const factor = sort.dir === "asc" ? 1 : -1;
+                    items = [...items].sort((a, b) => {
+                      if (sort.key === "amount") {
+                        return (a.amount - b.amount) * factor;
+                      }
+                      const av = sort.key === "name" ? a.name || "" : (policyName.get(a.policyId) ?? "");
+                      const bv = sort.key === "name" ? b.name || "" : (policyName.get(b.policyId) ?? "");
+                      return av.localeCompare(bv) * factor;
+                    });
+                  }
                   return (
                     // biome-ignore lint/a11y/noStaticElementInteractions: native drag-and-drop reorder target
                     <div
@@ -988,18 +1018,9 @@ function HomeContent() {
                           if (dragCategory !== category) {
                             moveCategory(dragCategory, category);
                           }
-                        } else if (dragExpense) {
-                          event.preventDefault();
-                          if (dragExpense.category !== category) {
-                            moveExpenseTo(dragExpense.id, category);
-                            setDragExpense({ id: dragExpense.id, category });
-                          }
                         }
                       }}
-                      onDrop={() => {
-                        setDragCategory(null);
-                        setDragExpense(null);
-                      }}
+                      onDrop={() => setDragCategory(null)}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
@@ -1021,63 +1042,44 @@ function HomeContent() {
                           </span>
                           <CategoryName category={category} onRename={renameCategory} />
                         </div>
-                        <button
-                          type="button"
-                          className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                          aria-label={`Remove category ${category}`}
-                          onClick={() =>
-                            patch((draft) => ({
-                              ...draft,
-                              categories: draft.categories.filter((item) => item !== category),
-                              expenses: draft.expenses.filter((expense) => expense.category !== category),
-                            }))
-                          }
-                        >
-                          <TrashIcon />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {items.length > 1 ? (
+                            <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                              {(["name", "amount", "split"] as ExpenseSortKey[]).map((key) => {
+                                const active = sort?.key === key;
+                                return (
+                                  <button
+                                    key={key}
+                                    type="button"
+                                    className={`px-2.5 py-1 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                                    aria-label={`Sort ${category} by ${EXPENSE_SORT_LABELS[key].toLowerCase()}${active ? ` (${sort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
+                                    onClick={() => cycleExpenseSort(category, key)}
+                                  >
+                                    {EXPENSE_SORT_LABELS[key]}
+                                    {active ? (sort.dir === "asc" ? " ↑" : " ↓") : ""}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                          <button
+                            type="button"
+                            className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                            aria-label={`Remove category ${category}`}
+                            onClick={() =>
+                              patch((draft) => ({
+                                ...draft,
+                                categories: draft.categories.filter((item) => item !== category),
+                                expenses: draft.expenses.filter((expense) => expense.category !== category),
+                              }))
+                            }
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
                       </div>
                       {items.map((expense, expenseIndex) => (
-                        // biome-ignore lint/a11y/noStaticElementInteractions: native drag-and-drop reorder target
-                        <div
-                          key={expense.id}
-                          data-exp={expense.id}
-                          className={`grid gap-2 transition-opacity sm:grid-cols-[auto_1.4fr_1fr_1.6fr_auto] sm:items-center ${dragExpense?.id === expense.id ? "opacity-40" : ""}`}
-                          onDragOver={(event) => {
-                            if (dragExpense) {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              if (dragExpense.id !== expense.id) {
-                                moveExpenseTo(dragExpense.id, category, expense.id);
-                                if (dragExpense.category !== category) {
-                                  setDragExpense({ id: dragExpense.id, category });
-                                }
-                              }
-                            }
-                          }}
-                          onDrop={(event) => {
-                            if (dragExpense) {
-                              event.stopPropagation();
-                              setDragExpense(null);
-                            }
-                          }}
-                        >
-                          {/* biome-ignore lint/a11y/noStaticElementInteractions: drag handle */}
-                          <span
-                            draggable
-                            onDragStart={(event) => {
-                              event.stopPropagation();
-                              setDragExpense({ id: expense.id, category });
-                              const row = (event.currentTarget as HTMLElement).closest("[data-exp]");
-                              if (row) {
-                                event.dataTransfer.setDragImage(row, 20, 16);
-                              }
-                            }}
-                            onDragEnd={() => setDragExpense(null)}
-                            className="cursor-grab select-none px-1 text-[#b3a392]"
-                            title="Drag to reorder expense"
-                          >
-                            ☰
-                          </span>
+                        <div key={expense.id} className="grid gap-2 transition-opacity sm:grid-cols-[1.4fr_1fr_1.6fr_auto] sm:items-center">
                           <input
                             id={`expense-name-${expense.id}`}
                             className={field}
