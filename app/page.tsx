@@ -660,29 +660,31 @@ function HomeContent() {
                 </button>
                 {collapsedUnitTypes ? null : (
                   <>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
                       <InlineAdd
                         placeholder="Add unit type"
                         onAdd={(value) =>
                           patch((draft) => (draft.unitTypes.includes(value) ? draft : { ...draft, unitTypes: [...draft.unitTypes, value] }))
                         }
                       />
-                      {budget.unitTypes.map((type) => (
-                        <span
-                          key={type}
-                          className="inline-flex items-center gap-2 rounded-full border border-[#e6d7c7] bg-white px-3 py-1 text-xs text-[#4a4037]"
-                        >
-                          {type}
-                          <button
-                            type="button"
-                            className="text-[#c0443c]"
-                            aria-label={`Remove ${type}`}
-                            onClick={() => patch((draft) => ({ ...draft, unitTypes: draft.unitTypes.filter((item) => item !== type) }))}
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {budget.unitTypes.map((type) => (
+                          <span
+                            key={type}
+                            className="inline-flex items-center gap-2 rounded-full border border-[#e6d7c7] bg-white px-3 py-1 text-xs text-[#4a4037]"
                           >
-                            ×
-                          </button>
-                        </span>
-                      ))}
+                            {type}
+                            <button
+                              type="button"
+                              className="text-[#c0443c]"
+                              aria-label={`Remove ${type}`}
+                              onClick={() => patch((draft) => ({ ...draft, unitTypes: draft.unitTypes.filter((item) => item !== type) }))}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </>
                 )}
