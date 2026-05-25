@@ -317,7 +317,12 @@ describe("normalizeBudget", () => {
 describe("serialize round-trips", () => {
   it("round-trips the budget through a URL param", () => {
     const encoded = serializeBudgetUrl(DEFAULT_BUDGET);
-    expect(parseBudgetUrl(encoded)).toEqual(DEFAULT_BUDGET);
+    const parsed = parseBudgetUrl(encoded);
+    expect(parsed).not.toBeNull();
+    // ids are dropped from the URL and regenerated on load, so re-encoding is the stable
+    // comparison: the packed form is deterministic and id-free, so equal output proves every
+    // value and cross-reference survived the round trip.
+    expect(serializeBudgetUrl(parsed as Budget)).toBe(encoded);
   });
 
   it("round-trips the budget through exported JSON", () => {
