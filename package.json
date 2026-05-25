@@ -1,4 +1,5 @@
 {
+  "//": "tar override: @vercel/fun pins deprecated tar@7.5.7. Drop once vercel/fun#135 ships. https://github.com/vercel/fun/pull/135",
   "dependencies": {
     "lz-string": "^1.5.0",
     "next": "^16.2.6",
@@ -21,6 +22,9 @@
     "node": "^24"
   },
   "name": "common-charges-calculator",
+  "overrides": {
+    "tar": "^7.5.15"
+  },
   "private": true,
   "scripts": {
     "build": "next build --turbopack",
