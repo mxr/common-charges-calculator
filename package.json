@@ -1,0 +1,35 @@
+{
+  "dependencies": {
+    "lz-string": "^1.5.0",
+    "next": "^16.2.6",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.15",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.6",
+    "tailwindcss": "^4",
+    "typescript": "^6",
+    "vitest": "^4.1.1"
+  },
+  "engines": {
+    "node": "^24"
+  },
+  "name": "common-charges-calculator",
+  "private": true,
+  "scripts": {
+    "build": "next build --turbopack",
+    "dev": "next dev --turbopack",
+    "lint": "biome check --write .",
+    "start": "next start",
+    "tag": "bash scripts/tag.sh",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest"
+  },
+  "version": "0.1.0"
+}

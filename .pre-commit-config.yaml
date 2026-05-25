@@ -1,0 +1,23 @@
+repos:
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
+  hooks:
+  - id: trailing-whitespace
+  - id: end-of-file-fixer
+  - id: pretty-format-json
+    args: [--autofix]
+    exclude: package-lock.json
+- repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
+  rev: 4380fbb73a154b5f5624794c1c78d9719ccc860f  # frozen: v2.16.0
+  hooks:
+  - id: pretty-format-yaml
+    args: [--autofix, --line-width=120]
+- repo: https://github.com/biomejs/pre-commit
+  rev: 5e71eb16415bb412e2e88eeea7348d6f9c780d25  # frozen: v2.4.15
+  hooks:
+  - id: biome-check
+- repo: https://github.com/zizmorcore/zizmor-pre-commit
+  rev: 9257c6050c0261b8c57e712f632dc4a8010109a9  # frozen: v1.25.2
+  hooks:
+  - id: zizmor
+    args: [--no-progress, --fix]
