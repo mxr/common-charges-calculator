@@ -661,6 +661,12 @@ function HomeContent() {
                 {collapsedUnitTypes ? null : (
                   <>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <InlineAdd
+                        placeholder="Add unit type"
+                        onAdd={(value) =>
+                          patch((draft) => (draft.unitTypes.includes(value) ? draft : { ...draft, unitTypes: [...draft.unitTypes, value] }))
+                        }
+                      />
                       {budget.unitTypes.map((type) => (
                         <span
                           key={type}
@@ -677,12 +683,6 @@ function HomeContent() {
                           </button>
                         </span>
                       ))}
-                      <InlineAdd
-                        placeholder="Add unit type"
-                        onAdd={(value) =>
-                          patch((draft) => (draft.unitTypes.includes(value) ? draft : { ...draft, unitTypes: [...draft.unitTypes, value] }))
-                        }
-                      />
                     </div>
                   </>
                 )}
