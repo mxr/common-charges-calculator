@@ -612,55 +612,16 @@ function HomeContent() {
           </div>
           {collapsedUnits ? null : (
             <>
-              <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-                <p className={sectionHint}>
-                  Common interests total{" "}
-                  <span className={Math.abs(ciSum - 100) <= 0.01 ? "font-semibold text-[#3f7a52]" : "font-semibold text-[#b44b43]"}>
-                    {formatCi(ciSum)}%
-                  </span>{" "}
-                  (should be as close to 100% as possible). Columns: label, type, common interest %, owner.
-                  {Math.abs(ciSum - 100) > 0.01 ? (
-                    <span className="font-semibold text-[#b44b43]"> Off from 100% - double-check the Unit definitions.</span>
-                  ) : null}
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  {unitView === "type" ? (
-                    <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
-                      {(["label", "ci", "owner"] as UnitSortKey[]).map((key) => {
-                        const active = unitSort?.key === key;
-                        return (
-                          <button
-                            key={key}
-                            type="button"
-                            className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
-                            aria-label={`Sort units by ${UNIT_SORT_LABELS[key].toLowerCase()}${active ? ` (${unitSort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
-                            onClick={() => cycleUnitSort(key)}
-                          >
-                            {UNIT_SORT_LABELS[key]}
-                            {active ? (unitSort.dir === "asc" ? " ↑" : " ↓") : ""}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                  <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
-                    <button
-                      type="button"
-                      className={`px-3 py-1.5 ${unitView === "type" ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
-                      onClick={() => setUnitView("type")}
-                    >
-                      By type
-                    </button>
-                    <button
-                      type="button"
-                      className={`px-3 py-1.5 ${unitView === "owner" ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
-                      onClick={() => setUnitView("owner")}
-                    >
-                      By owner
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <p className={`${sectionHint} mt-1`}>
+                Common interests total{" "}
+                <span className={Math.abs(ciSum - 100) <= 0.01 ? "font-semibold text-[#3f7a52]" : "font-semibold text-[#b44b43]"}>
+                  {formatCi(ciSum)}%
+                </span>{" "}
+                (should be as close to 100% as possible). Columns: label, type, common interest %, owner.
+                {Math.abs(ciSum - 100) > 0.01 ? (
+                  <span className="font-semibold text-[#b44b43]"> Off from 100% - double-check the Unit definitions.</span>
+                ) : null}
+              </p>
               <div className="mt-4 rounded-2xl border border-[#f2e8dd] bg-[#fffaf3] p-4">
                 <button
                   type="button"
@@ -701,6 +662,49 @@ function HomeContent() {
                     </div>
                   </>
                 )}
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3">
+                <div className="flex items-center gap-2">
+                  <span className={groupHeading}>Grouping</span>
+                  <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                    <button
+                      type="button"
+                      className={`px-3 py-1.5 ${unitView === "type" ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                      onClick={() => setUnitView("type")}
+                    >
+                      By type
+                    </button>
+                    <button
+                      type="button"
+                      className={`px-3 py-1.5 ${unitView === "owner" ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                      onClick={() => setUnitView("owner")}
+                    >
+                      By owner
+                    </button>
+                  </div>
+                </div>
+                {unitView === "type" ? (
+                  <div className="flex items-center gap-2">
+                    <span className={groupHeading}>Sort by</span>
+                    <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                      {(["label", "ci", "owner"] as UnitSortKey[]).map((key) => {
+                        const active = unitSort?.key === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                            aria-label={`Sort units by ${UNIT_SORT_LABELS[key].toLowerCase()}${active ? ` (${unitSort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
+                            onClick={() => cycleUnitSort(key)}
+                          >
+                            {UNIT_SORT_LABELS[key]}
+                            {active ? (unitSort.dir === "asc" ? " ↑" : " ↓") : ""}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
               </div>
               <div className="mt-4 flex flex-col gap-5">
                 {unitGroups.map((group) => {
