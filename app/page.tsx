@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { computeCharges } from "../lib/allocate";
 import { DEFAULT_BUDGET, makeId, validateBudget } from "../lib/budget";
@@ -59,7 +59,6 @@ const SearchIcon = () => (
 const formatCi = (value: number) => value.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 
 function HomeContent() {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -105,9 +104,9 @@ function HomeContent() {
       } else {
         nextParams.delete("c");
       }
-      router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+      window.history.replaceState(null, "", `${pathname}?${nextParams.toString()}`);
     },
-    [encoded, collapsedParam, pathname, router, searchParams],
+    [encoded, collapsedParam, pathname, searchParams],
   );
 
   const patch = (updater: (draft: Budget) => Budget) => setBudget((prev) => updater(structuredClone(prev)));
