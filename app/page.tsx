@@ -29,6 +29,14 @@ const groupHeading = "text-xs font-semibold uppercase tracking-[0.25em] text-[#8
 const iconButton =
   "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#d8c7b5] text-[#5b5148] transition hover:-translate-y-0.5 hover:bg-[#f1e7db]";
 
+type ExpenseSortKey = "name" | "amount" | "split";
+
+const EXPENSE_SORT_LABELS: Record<ExpenseSortKey, string> = {
+  name: "Name",
+  amount: "Amount",
+  split: "Split",
+};
+
 const iconProps = {
   viewBox: "0 0 24 24",
   fill: "none",
@@ -180,6 +188,21 @@ function HomeContent() {
   const [dragOwner, setDragOwner] = useState<string | null>(null);
   const [dragPolicy, setDragPolicy] = useState<string | null>(null);
   const [dragUnit, setDragUnit] = useState<string | null>(null);
+  // Per-category display sort. Absent = manual (drag) order. Clicking a key cycles asc -> desc -> manual.
+  const [expenseSort, setExpenseSort] = useState<Record<string, { key: ExpenseSortKey; dir: "asc" | "desc" }>>({});
+  const cycleExpenseSort = (category: string, key: ExpenseSortKey) =>
+    setExpenseSort((prev) => {
+      const current = prev[category];
+      const next = { ...prev };
+      if (!current || current.key !== key) {
+        next[category] = { key, dir: "asc" };
+      } else if (current.dir === "asc") {
+        next[category] = { key, dir: "desc" };
+      } else {
+        delete next[category];
+      }
+      return next;
+    });
 
   const toggleType = (key: string) =>
     setCollapsedTypes((prev) => {
@@ -393,6 +416,7 @@ function HomeContent() {
     unitsByOwner.set(charge.ownerId, list);
   }
   const expenseName = new Map(budget.expenses.map((expense) => [expense.id, expense.name || "(unnamed)"]));
+  const policyName = new Map(budget.policies.map((policy) => [policy.id, policy.name]));
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#f7f1e8]">
@@ -975,7 +999,19 @@ function HomeContent() {
               </p>
               <div className="mt-4 flex flex-col gap-5">
                 {expenseCategories.map((category) => {
-                  const items = budget.expenses.filter((expense) => expense.category === category);
+                  const sort = expenseSort[category];
+                  let items = budget.expenses.filter((expense) => expense.category === category);
+                  if (sort) {
+                    const factor = sort.dir === "asc" ? 1 : -1;
+                    items = [...items].sort((a, b) => {
+                      if (sort.key === "amount") {
+                        return (a.amount - b.amount) * factor;
+                      }
+                      const av = sort.key === "name" ? a.name || "" : (policyName.get(a.policyId) ?? "");
+                      const bv = sort.key === "name" ? b.name || "" : (policyName.get(b.policyId) ?? "");
+                      return av.localeCompare(bv) * factor;
+                    });
+                  }
                   return (
                     // biome-ignore lint/a11y/noStaticElementInteractions: native drag-and-drop reorder target
                     <div
@@ -1021,20 +1057,41 @@ function HomeContent() {
                           </span>
                           <CategoryName category={category} onRename={renameCategory} />
                         </div>
-                        <button
-                          type="button"
-                          className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                          aria-label={`Remove category ${category}`}
-                          onClick={() =>
-                            patch((draft) => ({
-                              ...draft,
-                              categories: draft.categories.filter((item) => item !== category),
-                              expenses: draft.expenses.filter((expense) => expense.category !== category),
-                            }))
-                          }
-                        >
-                          <TrashIcon />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {items.length > 1 ? (
+                            <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                              {(["name", "amount", "split"] as ExpenseSortKey[]).map((key) => {
+                                const active = sort?.key === key;
+                                return (
+                                  <button
+                                    key={key}
+                                    type="button"
+                                    className={`px-2.5 py-1 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                                    aria-label={`Sort ${category} by ${EXPENSE_SORT_LABELS[key].toLowerCase()}${active ? ` (${sort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
+                                    onClick={() => cycleExpenseSort(category, key)}
+                                  >
+                                    {EXPENSE_SORT_LABELS[key]}
+                                    {active ? (sort.dir === "asc" ? " ↑" : " ↓") : ""}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                          <button
+                            type="button"
+                            className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                            aria-label={`Remove category ${category}`}
+                            onClick={() =>
+                              patch((draft) => ({
+                                ...draft,
+                                categories: draft.categories.filter((item) => item !== category),
+                                expenses: draft.expenses.filter((expense) => expense.category !== category),
+                              }))
+                            }
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
                       </div>
                       {items.map((expense, expenseIndex) => (
                         // biome-ignore lint/a11y/noStaticElementInteractions: native drag-and-drop reorder target
@@ -1061,23 +1118,29 @@ function HomeContent() {
                             }
                           }}
                         >
-                          {/* biome-ignore lint/a11y/noStaticElementInteractions: drag handle */}
-                          <span
-                            draggable
-                            onDragStart={(event) => {
-                              event.stopPropagation();
-                              setDragExpense({ id: expense.id, category });
-                              const row = (event.currentTarget as HTMLElement).closest("[data-exp]");
-                              if (row) {
-                                event.dataTransfer.setDragImage(row, 20, 16);
-                              }
-                            }}
-                            onDragEnd={() => setDragExpense(null)}
-                            className="cursor-grab select-none px-1 text-[#b3a392]"
-                            title="Drag to reorder expense"
-                          >
-                            ☰
-                          </span>
+                          {sort ? (
+                            <span className="select-none px-1 text-[#d8cabb]" title="Clear sort to drag expenses">
+                              ☰
+                            </span>
+                          ) : (
+                            // biome-ignore lint/a11y/noStaticElementInteractions: drag handle
+                            <span
+                              draggable
+                              onDragStart={(event) => {
+                                event.stopPropagation();
+                                setDragExpense({ id: expense.id, category });
+                                const row = (event.currentTarget as HTMLElement).closest("[data-exp]");
+                                if (row) {
+                                  event.dataTransfer.setDragImage(row, 20, 16);
+                                }
+                              }}
+                              onDragEnd={() => setDragExpense(null)}
+                              className="cursor-grab select-none px-1 text-[#b3a392]"
+                              title="Drag to reorder expense"
+                            >
+                              ☰
+                            </span>
+                          )}
                           <input
                             id={`expense-name-${expense.id}`}
                             className={field}
