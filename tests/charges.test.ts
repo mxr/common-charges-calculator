@@ -1,4 +1,3 @@
-import { compressToEncodedURIComponent } from "lz-string";
 import { describe, expect, it } from "vitest";
 import { computeCharges } from "../lib/allocate";
 import { DEFAULT_BUDGET, makeId, normalizeBudget, validateBudget } from "../lib/budget";
@@ -357,11 +356,6 @@ describe("serialize round-trips", () => {
     expect(parsed.expenses[0].policyId).toBe("");
     expect(parsed.adjustments.offsets).toEqual([{ unitType: "commercial", pct: -5 }]);
     expect(parsed.adjustments.incomeOffset).toBe(200);
-  });
-
-  it("still parses older links that stored the full budget object", () => {
-    const legacy = compressToEncodedURIComponent(JSON.stringify(DEFAULT_BUDGET));
-    expect(parseBudgetUrl(legacy)).toEqual(DEFAULT_BUDGET);
   });
 });
 

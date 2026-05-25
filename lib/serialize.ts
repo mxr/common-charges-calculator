@@ -112,9 +112,7 @@ export const parseBudgetUrl = (value: string | null): Budget | null => {
     if (!json) {
       return null;
     }
-    const parsed = JSON.parse(json);
-    // New links are a packed array; older links stored the full budget object.
-    return Array.isArray(parsed) ? unpack(parsed as Packed) : normalizeBudget(parsed);
+    return unpack(JSON.parse(json) as Packed);
   } catch {
     return null;
   }
