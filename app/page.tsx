@@ -72,6 +72,9 @@ function HomeContent() {
   const [collapsedPolicies, setCollapsedPolicies] = useState(collapsedInit.has("policies"));
   const [collapsedExpenses, setCollapsedExpenses] = useState(collapsedInit.has("expenses"));
   const [collapsedUnitTypes, setCollapsedUnitTypes] = useState(collapsedInit.has("unitTypes"));
+  const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(
+    () => new Set([...collapsedInit].filter((key) => key.startsWith("t:")).map((key) => decodeURIComponent(key.slice(2)))),
+  );
   const [showBreakdown, setShowBreakdown] = useState(true);
   const [budget, setBudget] = useState<Budget>(() => parseBudgetUrl(searchParams.get("b")) ?? DEFAULT_BUDGET);
 
@@ -82,6 +85,7 @@ function HomeContent() {
     collapsedUnitTypes && "unitTypes",
     collapsedPolicies && "policies",
     collapsedExpenses && "expenses",
+    ...[...collapsedTypes].map((type) => `t:${encodeURIComponent(type)}`),
   ]
     .filter(Boolean)
     .join(",");
@@ -174,12 +178,65 @@ function HomeContent() {
 
   const [dragCategory, setDragCategory] = useState<string | null>(null);
   const [dragExpense, setDragExpense] = useState<{ id: string; category: string } | null>(null);
+  const [dragOwner, setDragOwner] = useState<string | null>(null);
+  const [dragPolicy, setDragPolicy] = useState<string | null>(null);
+  const [dragUnit, setDragUnit] = useState<string | null>(null);
+
+  const toggleType = (key: string) =>
+    setCollapsedTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
 
   // Move `item` to sit just before `target` within an array, returning a new array.
   const moveBefore = <T,>(arr: T[], item: T, target: T): T[] => {
     const next = arr.filter((value) => value !== item);
     next.splice(next.indexOf(target), 0, item);
     return next;
+  };
+
+  // Reorder by id: move the item with `fromId` to sit just before (or after, when `after`) `toId`.
+  // Single pass collects the moved item and the target's landing index, then one splice inserts it.
+  const moveItem = <T extends { id: string }>(arr: T[], fromId: string, toId: string, after: boolean): T[] => {
+    if (fromId === toId) {
+      return arr;
+    }
+    const next: T[] = [];
+    let item: T | undefined;
+    let insertAt = -1;
+    for (const value of arr) {
+      if (value.id === fromId) {
+        item = value;
+        continue;
+      }
+      if (value.id === toId) {
+        insertAt = after ? next.length + 1 : next.length;
+      }
+      next.push(value);
+    }
+    if (!item) {
+      return arr;
+    }
+    next.splice(insertAt < 0 ? next.length : insertAt, 0, item);
+    return next;
+  };
+
+  const moveOwner = (from: string, to: string, after: boolean) =>
+    patch((draft) => ({ ...draft, owners: moveItem(draft.owners, from, to, after) }));
+  const movePolicy = (from: string, to: string, after: boolean) =>
+    patch((draft) => ({ ...draft, policies: moveItem(draft.policies, from, to, after) }));
+  const moveUnit = (from: string, to: string, after: boolean) =>
+    patch((draft) => ({ ...draft, units: moveItem(draft.units, from, to, after) }));
+
+  // True when the drag pointer is past the vertical midpoint of the hovered row (insert after, not before).
+  const isAfterMidpoint = (event: React.DragEvent<HTMLElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return event.clientY > rect.top + rect.height / 2;
   };
 
   const moveCategory = (from: string, to: string) => {
@@ -225,60 +282,99 @@ function HomeContent() {
     });
   };
 
-  const renderUnitRow = (unit: Unit) => (
-    <div key={unit.id} className="grid gap-2 sm:grid-cols-[1.2fr_1fr_0.9fr_1.4fr_auto] sm:items-center">
-      <input
-        className={field}
-        value={unit.label}
-        onChange={(event) =>
-          patch((draft) => ({ ...draft, units: draft.units.map((u) => (u.id === unit.id ? { ...u, label: event.target.value } : u)) }))
+  const renderUnitRow = (unit: Unit) => {
+    const reorderable = unitView === "type";
+    return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: native drag-and-drop reorder target
+      <div
+        key={unit.id}
+        data-unit={unit.id}
+        className={`grid gap-2 transition-opacity sm:items-center ${reorderable ? "sm:grid-cols-[auto_1.2fr_1fr_0.9fr_1.4fr_auto]" : "sm:grid-cols-[1.2fr_1fr_0.9fr_1.4fr_auto]"} ${dragUnit === unit.id ? "opacity-40" : ""}`}
+        onDragOver={
+          reorderable
+            ? (event) => {
+                if (dragUnit) {
+                  event.preventDefault();
+                  if (dragUnit !== unit.id) {
+                    moveUnit(dragUnit, unit.id, isAfterMidpoint(event));
+                  }
+                }
+              }
+            : undefined
         }
-      />
-      <select
-        className={field}
-        value={unit.type}
-        onChange={(event) =>
-          patch((draft) => ({ ...draft, units: draft.units.map((u) => (u.id === unit.id ? { ...u, type: event.target.value } : u)) }))
-        }
+        onDrop={reorderable ? () => setDragUnit(null) : undefined}
       >
-        {budget.unitTypes.map((type) => (
-          <option key={type} value={type}>
-            {type}
-          </option>
-        ))}
-      </select>
-      <CiInput
-        className={field}
-        value={unit.commonInterest}
-        onChange={(next) =>
-          patch((draft) => ({
-            ...draft,
-            units: draft.units.map((u) => (u.id === unit.id ? { ...u, commonInterest: next } : u)),
-          }))
-        }
-      />
-      <select
-        className={field}
-        value={unit.ownerId}
-        onChange={(event) =>
-          patch((draft) => ({ ...draft, units: draft.units.map((u) => (u.id === unit.id ? { ...u, ownerId: event.target.value } : u)) }))
-        }
-      >
-        {budget.owners.map((owner) => (
-          <option key={owner.id} value={owner.id}>
-            {owner.name}
-          </option>
-        ))}
-      </select>
-      <button
-        type="button"
-        className={removeButton}
-        onClick={() => patch((draft) => ({ ...draft, units: draft.units.filter((u) => u.id !== unit.id) }))}
-      >
-        Remove
-      </button>
-    </div>
-  );
+        {reorderable ? (
+          // biome-ignore lint/a11y/noStaticElementInteractions: drag handle
+          <span
+            draggable
+            onDragStart={(event) => {
+              setDragUnit(unit.id);
+              const row = (event.currentTarget as HTMLElement).closest("[data-unit]");
+              if (row) {
+                event.dataTransfer.setDragImage(row, 20, 16);
+              }
+            }}
+            onDragEnd={() => setDragUnit(null)}
+            className="cursor-grab select-none px-1 text-[#b3a392]"
+            title="Drag to reorder unit"
+          >
+            ☰
+          </span>
+        ) : null}
+        <input
+          className={field}
+          value={unit.label}
+          onChange={(event) =>
+            patch((draft) => ({ ...draft, units: draft.units.map((u) => (u.id === unit.id ? { ...u, label: event.target.value } : u)) }))
+          }
+        />
+        <select
+          className={field}
+          value={unit.type}
+          onChange={(event) =>
+            patch((draft) => ({ ...draft, units: draft.units.map((u) => (u.id === unit.id ? { ...u, type: event.target.value } : u)) }))
+          }
+        >
+          {budget.unitTypes.map((type) => (
+            <option key={type} value={type}>
+              {type}
+            </option>
+          ))}
+        </select>
+        <CiInput
+          className={field}
+          value={unit.commonInterest}
+          onChange={(next) =>
+            patch((draft) => ({
+              ...draft,
+              units: draft.units.map((u) => (u.id === unit.id ? { ...u, commonInterest: next } : u)),
+            }))
+          }
+        />
+        <select
+          className={field}
+          value={unit.ownerId}
+          onChange={(event) =>
+            patch((draft) => ({ ...draft, units: draft.units.map((u) => (u.id === unit.id ? { ...u, ownerId: event.target.value } : u)) }))
+          }
+        >
+          {budget.owners.map((owner) => (
+            <option key={owner.id} value={owner.id}>
+              {owner.name}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className={removeButton}
+          onClick={() => patch((draft) => ({ ...draft, units: draft.units.filter((u) => u.id !== unit.id) }))}
+        >
+          Remove
+        </button>
+      </div>
+    );
+  };
 
   const unitGroups: { key: string; label: string; units: Unit[] }[] =
     unitView === "type"
@@ -374,6 +470,7 @@ function HomeContent() {
                 <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-[#eadccb] text-left text-xs font-semibold uppercase tracking-[0.2em] text-[#8c7b6c]">
+                      <th className="py-2 pr-2" aria-label="Reorder" />
                       <th className="py-2 pr-4">Owner name</th>
                       <th className="py-2 pr-4">Current $/mo</th>
                       <th className="py-2 pl-4 text-right">Actions</th>
@@ -382,7 +479,38 @@ function HomeContent() {
                   <tbody>
                     {budget.owners.map((owner, index) => {
                       return (
-                        <tr key={owner.id} className="border-b border-[#f2e8dd]">
+                        <tr
+                          key={owner.id}
+                          data-owner={owner.id}
+                          className={`border-b border-[#f2e8dd] transition-opacity ${dragOwner === owner.id ? "opacity-40" : ""}`}
+                          onDragOver={(event) => {
+                            if (dragOwner) {
+                              event.preventDefault();
+                              if (dragOwner !== owner.id) {
+                                moveOwner(dragOwner, owner.id, isAfterMidpoint(event));
+                              }
+                            }
+                          }}
+                          onDrop={() => setDragOwner(null)}
+                        >
+                          <td className="py-2 pr-2 align-middle">
+                            {/* biome-ignore lint/a11y/noStaticElementInteractions: drag handle */}
+                            <span
+                              draggable
+                              onDragStart={(event) => {
+                                setDragOwner(owner.id);
+                                const row = (event.currentTarget as HTMLElement).closest("[data-owner]");
+                                if (row) {
+                                  event.dataTransfer.setDragImage(row, 20, 16);
+                                }
+                              }}
+                              onDragEnd={() => setDragOwner(null)}
+                              className="cursor-grab select-none text-[#b3a392]"
+                              title="Drag to reorder owner"
+                            >
+                              ☰
+                            </span>
+                          </td>
                           <td className="py-2 pr-4 align-middle">
                             <input
                               id={`owner-name-${owner.id}`}
@@ -564,13 +692,22 @@ function HomeContent() {
               <div className="mt-4 flex flex-col gap-5">
                 {unitGroups.map((group) => {
                   const groupCi = group.units.reduce((sum, unit) => sum + unit.commonInterest, 0);
+                  const collapsible = unitView === "type";
+                  const collapsed = collapsible && collapsedTypes.has(group.key);
                   return (
                     <div key={group.key} className="flex flex-col gap-2">
                       <div className="flex items-center justify-between">
-                        <span className={groupHeading}>{group.label || "—"}</span>
+                        {collapsible ? (
+                          <button type="button" className="flex items-center gap-2" onClick={() => toggleType(group.key)}>
+                            <span className="text-lg leading-none text-[#8c7b6c]">{collapsed ? "▸" : "▾"}</span>
+                            <span className={groupHeading}>{group.label || "—"}</span>
+                          </button>
+                        ) : (
+                          <span className={groupHeading}>{group.label || "—"}</span>
+                        )}
                         <span className="text-xs text-[#9a8a7b]">{formatCi(groupCi)}%</span>
                       </div>
-                      {group.units.length === 0 ? (
+                      {collapsed ? null : group.units.length === 0 ? (
                         <p className="text-sm italic text-[#9a8a7b]">No units.</p>
                       ) : (
                         group.units.map((unit) => renderUnitRow(unit))
@@ -620,18 +757,50 @@ function HomeContent() {
                 {budget.policies.map((policy) => {
                   const weightSum = policy.rules.reduce((sum, rule) => sum + rule.weight, 0);
                   return (
-                    <div key={policy.id} className="rounded-2xl border border-[#f2e8dd] bg-[#fffaf3] p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <input
-                          className={`${field} max-w-sm`}
-                          value={policy.name}
-                          onChange={(event) =>
-                            patch((draft) => ({
-                              ...draft,
-                              policies: draft.policies.map((p) => (p.id === policy.id ? { ...p, name: event.target.value } : p)),
-                            }))
+                    // biome-ignore lint/a11y/noStaticElementInteractions: native drag-and-drop reorder target
+                    <div
+                      key={policy.id}
+                      data-policy={policy.id}
+                      className={`rounded-2xl border border-[#f2e8dd] bg-[#fffaf3] p-4 transition-opacity ${dragPolicy === policy.id ? "opacity-40" : ""}`}
+                      onDragOver={(event) => {
+                        if (dragPolicy) {
+                          event.preventDefault();
+                          if (dragPolicy !== policy.id) {
+                            movePolicy(dragPolicy, policy.id, isAfterMidpoint(event));
                           }
-                        />
+                        }
+                      }}
+                      onDrop={() => setDragPolicy(null)}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          {/* biome-ignore lint/a11y/noStaticElementInteractions: drag handle */}
+                          <span
+                            draggable
+                            onDragStart={(event) => {
+                              setDragPolicy(policy.id);
+                              const card = (event.currentTarget as HTMLElement).closest("[data-policy]");
+                              if (card) {
+                                event.dataTransfer.setDragImage(card, 20, 16);
+                              }
+                            }}
+                            onDragEnd={() => setDragPolicy(null)}
+                            className="cursor-grab select-none text-[#b3a392]"
+                            title="Drag to reorder policy"
+                          >
+                            ☰
+                          </span>
+                          <input
+                            className={`${field} max-w-sm`}
+                            value={policy.name}
+                            onChange={(event) =>
+                              patch((draft) => ({
+                                ...draft,
+                                policies: draft.policies.map((p) => (p.id === policy.id ? { ...p, name: event.target.value } : p)),
+                              }))
+                            }
+                          />
+                        </div>
                         <div className="flex items-center gap-3">
                           <span
                             className={
