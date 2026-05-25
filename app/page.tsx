@@ -201,17 +201,28 @@ function HomeContent() {
   };
 
   // Reorder by id: move the item with `fromId` to sit just before `toId`, returning a new array.
+  // Single pass collects the moved item and the target's landing index, then one splice inserts it.
   const moveItemBefore = <T extends { id: string }>(arr: T[], fromId: string, toId: string): T[] => {
     if (fromId === toId) {
       return arr;
     }
-    const item = arr.find((value) => value.id === fromId);
+    const next: T[] = [];
+    let item: T | undefined;
+    let insertAt = -1;
+    for (const value of arr) {
+      if (value.id === fromId) {
+        item = value;
+        continue;
+      }
+      if (value.id === toId) {
+        insertAt = next.length;
+      }
+      next.push(value);
+    }
     if (!item) {
       return arr;
     }
-    const next = arr.filter((value) => value.id !== fromId);
-    const index = next.findIndex((value) => value.id === toId);
-    next.splice(index < 0 ? next.length : index, 0, item);
+    next.splice(insertAt < 0 ? next.length : insertAt, 0, item);
     return next;
   };
 
