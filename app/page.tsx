@@ -660,7 +660,7 @@ function HomeContent() {
                 </button>
                 {collapsedUnitTypes ? null : (
                   <>
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
                       {budget.unitTypes.map((type) => (
                         <span
                           key={type}
@@ -677,8 +677,6 @@ function HomeContent() {
                           </button>
                         </span>
                       ))}
-                    </div>
-                    <div className="mt-3">
                       <InlineAdd
                         placeholder="Add unit type"
                         onAdd={(value) =>
