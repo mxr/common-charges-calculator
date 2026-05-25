@@ -317,7 +317,12 @@ describe("normalizeBudget", () => {
 describe("serialize round-trips", () => {
   it("round-trips the budget through a URL param", () => {
     const encoded = serializeBudgetUrl(DEFAULT_BUDGET);
-    expect(parseBudgetUrl(encoded)).toEqual(DEFAULT_BUDGET);
+    const parsed = parseBudgetUrl(encoded);
+    expect(parsed).not.toBeNull();
+    // ids are dropped from the URL and regenerated on load, so re-encoding is the stable
+    // comparison: the packed form is deterministic and id-free, so equal output proves every
+    // value and cross-reference survived the round trip.
+    expect(serializeBudgetUrl(parsed as Budget)).toBe(encoded);
   });
 
   it("round-trips the budget through exported JSON", () => {
@@ -330,6 +335,27 @@ describe("serialize round-trips", () => {
     expect(parseBudgetUrl("")).toBeNull();
     expect(parseBudgetUrl("!!!not-valid!!!")).toBeNull();
     expect(parseBudgetJson("not json")).toBeNull();
+  });
+
+  it("preserves orphan references and offsets through the packed encoding", () => {
+    // commercial type, the "p2" policy and "ghost" owner are not in their lookup lists, so the
+    // packed form stores them as string/-1 fallbacks rather than indices.
+    const budget = makeBudget({
+      unitTypes: ["residential"],
+      categories: ["general"],
+      owners: [owner("o1")],
+      units: [unit("u1", "commercial", 100, "ghost")],
+      policies: [{ id: "p", name: "standard", rules: [{ unitTypes: ["commercial"], weight: 100, method: "common_interest" }] }],
+      expenses: [{ id: "e", name: "exp", category: "misc", amount: 100, policyId: "p2" }],
+      adjustments: { inflationPct: 5, reservePct: 10, offsets: [{ unitType: "commercial", pct: -5 }], incomeOffset: 200 },
+    });
+    const parsed = parseBudgetUrl(serializeBudgetUrl(budget)) as Budget;
+    expect(parsed.units[0].type).toBe("commercial");
+    expect(parsed.units[0].ownerId).toBe("");
+    expect(parsed.expenses[0].category).toBe("misc");
+    expect(parsed.expenses[0].policyId).toBe("");
+    expect(parsed.adjustments.offsets).toEqual([{ unitType: "commercial", pct: -5 }]);
+    expect(parsed.adjustments.incomeOffset).toBe(200);
   });
 });
 
