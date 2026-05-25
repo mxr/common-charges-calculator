@@ -200,9 +200,9 @@ function HomeContent() {
     return next;
   };
 
-  // Reorder by id: move the item with `fromId` to sit just before `toId`, returning a new array.
+  // Reorder by id: move the item with `fromId` to sit just before (or after, when `after`) `toId`.
   // Single pass collects the moved item and the target's landing index, then one splice inserts it.
-  const moveItemBefore = <T extends { id: string }>(arr: T[], fromId: string, toId: string): T[] => {
+  const moveItem = <T extends { id: string }>(arr: T[], fromId: string, toId: string, after: boolean): T[] => {
     if (fromId === toId) {
       return arr;
     }
@@ -215,7 +215,7 @@ function HomeContent() {
         continue;
       }
       if (value.id === toId) {
-        insertAt = next.length;
+        insertAt = after ? next.length + 1 : next.length;
       }
       next.push(value);
     }
@@ -226,9 +226,18 @@ function HomeContent() {
     return next;
   };
 
-  const moveOwner = (from: string, to: string) => patch((draft) => ({ ...draft, owners: moveItemBefore(draft.owners, from, to) }));
-  const movePolicy = (from: string, to: string) => patch((draft) => ({ ...draft, policies: moveItemBefore(draft.policies, from, to) }));
-  const moveUnit = (from: string, to: string) => patch((draft) => ({ ...draft, units: moveItemBefore(draft.units, from, to) }));
+  const moveOwner = (from: string, to: string, after: boolean) =>
+    patch((draft) => ({ ...draft, owners: moveItem(draft.owners, from, to, after) }));
+  const movePolicy = (from: string, to: string, after: boolean) =>
+    patch((draft) => ({ ...draft, policies: moveItem(draft.policies, from, to, after) }));
+  const moveUnit = (from: string, to: string, after: boolean) =>
+    patch((draft) => ({ ...draft, units: moveItem(draft.units, from, to, after) }));
+
+  // True when the drag pointer is past the vertical midpoint of the hovered row (insert after, not before).
+  const isAfterMidpoint = (event: React.DragEvent<HTMLElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return event.clientY > rect.top + rect.height / 2;
+  };
 
   const moveCategory = (from: string, to: string) => {
     if (from === to) {
@@ -287,7 +296,7 @@ function HomeContent() {
                 if (dragUnit) {
                   event.preventDefault();
                   if (dragUnit !== unit.id) {
-                    moveUnit(dragUnit, unit.id);
+                    moveUnit(dragUnit, unit.id, isAfterMidpoint(event));
                   }
                 }
               }
@@ -478,7 +487,7 @@ function HomeContent() {
                             if (dragOwner) {
                               event.preventDefault();
                               if (dragOwner !== owner.id) {
-                                moveOwner(dragOwner, owner.id);
+                                moveOwner(dragOwner, owner.id, isAfterMidpoint(event));
                               }
                             }
                           }}
@@ -757,7 +766,7 @@ function HomeContent() {
                         if (dragPolicy) {
                           event.preventDefault();
                           if (dragPolicy !== policy.id) {
-                            movePolicy(dragPolicy, policy.id);
+                            movePolicy(dragPolicy, policy.id, isAfterMidpoint(event));
                           }
                         }
                       }}
