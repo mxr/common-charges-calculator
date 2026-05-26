@@ -9,7 +9,7 @@ import { parseOwnerLines, parseUnitLines } from "../lib/parse";
 import { exportBudgetJson, parseBudgetJson, parseBudgetUrl, serializeBudgetUrl } from "../lib/serialize";
 import { ALLOCATION_METHOD_LABELS, ALLOCATION_METHODS } from "../lib/types";
 import type { UnitCharge } from "../lib/allocate";
-import type { Budget, Owner, Unit } from "../lib/types";
+import type { Budget, Expense, Owner, Unit } from "../lib/types";
 
 const card = "rounded-3xl border border-[#e7d7c8] bg-white/80 p-6 shadow-[0_20px_60px_rgba(120,96,77,0.12)] backdrop-blur";
 const sectionTitle = "text-2xl font-semibold text-[#181716]";
@@ -74,6 +74,93 @@ function nextSortDir<K>(current: SortState<K> | undefined, key: K): "asc" | "des
   return current.dir === "asc" ? "desc" : null;
 }
 
+function compareExpenses(a: Expense, b: Expense, key: ExpenseSortKey, dir: "asc" | "desc", policyName: Map<string, string>): number {
+  const factor = dir === "asc" ? 1 : -1;
+  if (key === "amount") {
+    return (a.amount - b.amount) * factor;
+  }
+  const av = key === "name" ? a.name || "" : (policyName.get(a.policyId) ?? "");
+  const bv = key === "name" ? b.name || "" : (policyName.get(b.policyId) ?? "");
+  return av.localeCompare(bv) * factor;
+}
+
+function compareUnits(a: Unit, b: Unit, key: UnitSortKey, dir: "asc" | "desc", ownerName: Map<string, string>): number {
+  const factor = dir === "asc" ? 1 : -1;
+  if (key === "ci") {
+    return (a.commonInterest - b.commonInterest) * factor;
+  }
+  const av = key === "label" ? a.label : (ownerName.get(a.ownerId) ?? "");
+  const bv = key === "label" ? b.label : (ownerName.get(b.ownerId) ?? "");
+  return av.localeCompare(bv) * factor;
+}
+
+function compareOwners(a: Owner, b: Owner, key: OwnerSortKey, dir: "asc" | "desc"): number {
+  const factor = dir === "asc" ? 1 : -1;
+  if (key === "currentMonthly") {
+    return (a.currentMonthly - b.currentMonthly) * factor;
+  }
+  return a.name.localeCompare(b.name) * factor;
+}
+
+// Reorder by the saved order (preserving cascade), then sort by `compare`, returning the new id order.
+function deriveOrder<T>(items: T[], prevOrder: string[], idOf: (item: T) => string, compare: (a: T, b: T) => number): string[] {
+  const ordered = applyOrder(items, prevOrder, idOf);
+  ordered.sort(compare);
+  return ordered.map(idOf);
+}
+
+type SortParam = {
+  owner: SortState<OwnerSortKey> | null;
+  unit: SortState<UnitSortKey> | null;
+  expenses: Record<string, SortState<ExpenseSortKey>>;
+};
+
+// Sort state survives a refresh via the `s` URL param. Only the active key/dir per group is stored;
+// the display order is re-derived on load (a single stored sort reproduces its order exactly).
+// Token forms: `o:<key>:<dir>`, `u:<key>:<dir>`, `e:<encodedCategory>:<key>:<dir>`, joined by ",".
+// encodeURIComponent escapes both ":" and "," so categories never collide with the delimiters.
+function serializeSortParam(
+  owner: SortState<OwnerSortKey> | null,
+  unit: SortState<UnitSortKey> | null,
+  expenses: Record<string, SortState<ExpenseSortKey>>,
+): string {
+  const tokens: string[] = [];
+  if (owner) {
+    tokens.push(`o:${owner.key}:${owner.dir}`);
+  }
+  if (unit) {
+    tokens.push(`u:${unit.key}:${unit.dir}`);
+  }
+  for (const [category, sort] of Object.entries(expenses)) {
+    tokens.push(`e:${encodeURIComponent(category)}:${sort.key}:${sort.dir}`);
+  }
+  return tokens.join(",");
+}
+
+function parseSortParam(raw: string): SortParam {
+  const result: SortParam = { owner: null, unit: null, expenses: {} };
+  for (const token of raw.split(",").filter(Boolean)) {
+    const parts = token.split(":");
+    if (parts[0] === "o" && parts.length === 3) {
+      const [, key, dir] = parts;
+      if ((key === "name" || key === "currentMonthly") && (dir === "asc" || dir === "desc")) {
+        result.owner = { key, dir };
+      }
+    } else if (parts[0] === "u" && parts.length === 3) {
+      const [, key, dir] = parts;
+      if ((key === "label" || key === "ci" || key === "owner") && (dir === "asc" || dir === "desc")) {
+        result.unit = { key, dir };
+      }
+    } else if (parts[0] === "e" && parts.length === 4) {
+      const [, category, key, dir] = parts;
+      if ((key === "name" || key === "amount" || key === "split") && (dir === "asc" || dir === "desc")) {
+        result.expenses[decodeURIComponent(category)] = { key, dir };
+      }
+    }
+  }
+  return result;
+}
+
 const iconProps = {
   viewBox: "0 0 24 24",
   fill: "none",
@@ -121,6 +208,7 @@ function HomeContent() {
   );
   const [showBreakdown, setShowBreakdown] = useState(true);
   const [budget, setBudget] = useState<Budget>(() => parseBudgetUrl(searchParams.get("b")) ?? DEFAULT_BUDGET);
+  const sortInit = parseSortParam(searchParams.get("s") ?? "");
 
   const encoded = useMemo(() => serializeBudgetUrl(budget), [budget]);
   const collapsedParam = [
@@ -136,23 +224,6 @@ function HomeContent() {
   const result = useMemo(() => computeCharges(budget), [budget]);
   const warnings = useMemo(() => validateBudget(budget), [budget]);
   const ciSum = budget.units.reduce((sum, unit) => sum + unit.commonInterest, 0);
-
-  useEffect(
-    function syncUrlState() {
-      if ((searchParams.get("b") ?? "") === encoded && (searchParams.get("c") ?? "") === collapsedParam) {
-        return;
-      }
-      const nextParams = new URLSearchParams(searchParams);
-      nextParams.set("b", encoded);
-      if (collapsedParam) {
-        nextParams.set("c", collapsedParam);
-      } else {
-        nextParams.delete("c");
-      }
-      window.history.replaceState(null, "", `${pathname}?${nextParams.toString()}`);
-    },
-    [encoded, collapsedParam, pathname, searchParams],
-  );
 
   const patch = (updater: (draft: Budget) => Budget) => setBudget((prev) => updater(structuredClone(prev)));
 
@@ -226,8 +297,20 @@ function HomeContent() {
   // order); `expenseSort` just tracks the active key/dir for the arrow indicator. Clicking a key
   // cycles asc -> desc -> off. Each sort runs on the current display order, so sorting by one key
   // then another keeps the earlier sort as a stable tiebreaker.
-  const [expenseOrder, setExpenseOrder] = useState<Record<string, string[]>>({});
-  const [expenseSort, setExpenseSort] = useState<Record<string, SortState<ExpenseSortKey>>>({});
+  const [expenseSort, setExpenseSort] = useState<Record<string, SortState<ExpenseSortKey>>>(sortInit.expenses);
+  const [expenseOrder, setExpenseOrder] = useState<Record<string, string[]>>(() => {
+    const policyName = new Map(budget.policies.map((policy) => [policy.id, policy.name]));
+    const orders: Record<string, string[]> = {};
+    for (const [category, sort] of Object.entries(sortInit.expenses)) {
+      orders[category] = deriveOrder(
+        budget.expenses.filter((expense) => expense.category === category),
+        [],
+        (expense) => expense.id,
+        (a, b) => compareExpenses(a, b, sort.key, sort.dir, policyName),
+      );
+    }
+    return orders;
+  });
   const cycleExpenseSort = (category: string, key: ExpenseSortKey) => {
     const dir = nextSortDir(expenseSort[category], key);
     if (dir === null) {
@@ -244,27 +327,31 @@ function HomeContent() {
       return;
     }
     const policyName = new Map(budget.policies.map((policy) => [policy.id, policy.name]));
-    const factor = dir === "asc" ? 1 : -1;
-    const items = applyOrder(
+    const order = deriveOrder(
       budget.expenses.filter((expense) => expense.category === category),
       expenseOrder[category] ?? [],
       (expense) => expense.id,
+      (a, b) => compareExpenses(a, b, key, dir, policyName),
     );
-    items.sort((a, b) => {
-      if (key === "amount") {
-        return (a.amount - b.amount) * factor;
-      }
-      const av = key === "name" ? a.name || "" : (policyName.get(a.policyId) ?? "");
-      const bv = key === "name" ? b.name || "" : (policyName.get(b.policyId) ?? "");
-      return av.localeCompare(bv) * factor;
-    });
-    setExpenseOrder((prev) => ({ ...prev, [category]: items.map((expense) => expense.id) }));
+    setExpenseOrder((prev) => ({ ...prev, [category]: order }));
     setExpenseSort((prev) => ({ ...prev, [category]: { key, dir } }));
   };
   // Display sort for units in the "by type" view. `unitOrder` is the saved id order across all units
   // (empty = entry order); sorting is applied within each type group at render. Same cascade rule.
-  const [unitOrder, setUnitOrder] = useState<string[]>([]);
-  const [unitSort, setUnitSort] = useState<SortState<UnitSortKey> | null>(null);
+  const [unitSort, setUnitSort] = useState<SortState<UnitSortKey> | null>(sortInit.unit);
+  const [unitOrder, setUnitOrder] = useState<string[]>(() => {
+    if (!sortInit.unit) {
+      return [];
+    }
+    const ownerName = new Map(budget.owners.map((owner) => [owner.id, owner.name]));
+    const { key, dir } = sortInit.unit;
+    return deriveOrder(
+      budget.units,
+      [],
+      (unit) => unit.id,
+      (a, b) => compareUnits(a, b, key, dir, ownerName),
+    );
+  });
   const cycleUnitSort = (key: UnitSortKey) => {
     const dir = nextSortDir(unitSort ?? undefined, key);
     if (dir === null) {
@@ -273,22 +360,30 @@ function HomeContent() {
       return;
     }
     const ownerName = new Map(budget.owners.map((owner) => [owner.id, owner.name]));
-    const factor = dir === "asc" ? 1 : -1;
-    const items = applyOrder(budget.units, unitOrder, (unit) => unit.id);
-    items.sort((a, b) => {
-      if (key === "ci") {
-        return (a.commonInterest - b.commonInterest) * factor;
-      }
-      const av = key === "label" ? a.label : (ownerName.get(a.ownerId) ?? "");
-      const bv = key === "label" ? b.label : (ownerName.get(b.ownerId) ?? "");
-      return av.localeCompare(bv) * factor;
-    });
-    setUnitOrder(items.map((unit) => unit.id));
+    setUnitOrder(
+      deriveOrder(
+        budget.units,
+        unitOrder,
+        (unit) => unit.id,
+        (a, b) => compareUnits(a, b, key, dir, ownerName),
+      ),
+    );
     setUnitSort({ key, dir });
   };
   // Display sort for the owners table. Same cascade rule as expenses and units.
-  const [ownerOrder, setOwnerOrder] = useState<string[]>([]);
-  const [ownerSort, setOwnerSort] = useState<SortState<OwnerSortKey> | null>(null);
+  const [ownerSort, setOwnerSort] = useState<SortState<OwnerSortKey> | null>(sortInit.owner);
+  const [ownerOrder, setOwnerOrder] = useState<string[]>(() => {
+    if (!sortInit.owner) {
+      return [];
+    }
+    const { key, dir } = sortInit.owner;
+    return deriveOrder(
+      budget.owners,
+      [],
+      (owner) => owner.id,
+      (a, b) => compareOwners(a, b, key, dir),
+    );
+  });
   const cycleOwnerSort = (key: OwnerSortKey) => {
     const dir = nextSortDir(ownerSort ?? undefined, key);
     if (dir === null) {
@@ -296,17 +391,43 @@ function HomeContent() {
       setOwnerSort(null);
       return;
     }
-    const factor = dir === "asc" ? 1 : -1;
-    const items = applyOrder(budget.owners, ownerOrder, (owner) => owner.id);
-    items.sort((a, b) => {
-      if (key === "currentMonthly") {
-        return (a.currentMonthly - b.currentMonthly) * factor;
-      }
-      return a.name.localeCompare(b.name) * factor;
-    });
-    setOwnerOrder(items.map((owner) => owner.id));
+    setOwnerOrder(
+      deriveOrder(
+        budget.owners,
+        ownerOrder,
+        (owner) => owner.id,
+        (a, b) => compareOwners(a, b, key, dir),
+      ),
+    );
     setOwnerSort({ key, dir });
   };
+
+  const sortParam = serializeSortParam(ownerSort, unitSort, expenseSort);
+  useEffect(
+    function syncUrlState() {
+      if (
+        (searchParams.get("b") ?? "") === encoded &&
+        (searchParams.get("c") ?? "") === collapsedParam &&
+        (searchParams.get("s") ?? "") === sortParam
+      ) {
+        return;
+      }
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set("b", encoded);
+      if (collapsedParam) {
+        nextParams.set("c", collapsedParam);
+      } else {
+        nextParams.delete("c");
+      }
+      if (sortParam) {
+        nextParams.set("s", sortParam);
+      } else {
+        nextParams.delete("s");
+      }
+      window.history.replaceState(null, "", `${pathname}?${nextParams.toString()}`);
+    },
+    [encoded, collapsedParam, sortParam, pathname, searchParams],
+  );
 
   const toggleType = (key: string) =>
     setCollapsedTypes((prev) => {
