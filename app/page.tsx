@@ -45,6 +45,35 @@ const UNIT_SORT_LABELS: Record<UnitSortKey, string> = {
   owner: "Owner",
 };
 
+type OwnerSortKey = "name" | "currentMonthly";
+
+const OWNER_SORT_LABELS: Record<OwnerSortKey, string> = {
+  name: "Name",
+  currentMonthly: "Current $/mo",
+};
+
+type SortState<K> = { key: K; dir: "asc" | "desc" };
+
+// Reorder `items` to match the saved id order. Items missing from `orderIds` keep their entry order
+// at the end. The sort that produced `orderIds` ran on the prior display order, so a single-key
+// sort cascades: equal values keep whatever order the previous sort left them in.
+function applyOrder<T>(items: T[], orderIds: string[], idOf: (item: T) => string): T[] {
+  if (orderIds.length === 0) {
+    return [...items];
+  }
+  const rank = new Map(orderIds.map((id, index) => [id, index]));
+  return [...items].sort((a, b) => (rank.get(idOf(a)) ?? Number.POSITIVE_INFINITY) - (rank.get(idOf(b)) ?? Number.POSITIVE_INFINITY));
+}
+
+// Next direction when a sort key is clicked: a new/changed key starts asc, asc flips to desc, desc
+// turns the sort off (null = back to entry order).
+function nextSortDir<K>(current: SortState<K> | undefined, key: K): "asc" | "desc" | null {
+  if (!current || current.key !== key) {
+    return "asc";
+  }
+  return current.dir === "asc" ? "desc" : null;
+}
+
 const iconProps = {
   viewBox: "0 0 24 24",
   fill: "none",
@@ -192,32 +221,92 @@ function HomeContent() {
   };
 
   const [dragCategory, setDragCategory] = useState<string | null>(null);
-  const [dragOwner, setDragOwner] = useState<string | null>(null);
   const [dragPolicy, setDragPolicy] = useState<string | null>(null);
-  // Per-category display sort. Absent = entry order. Clicking a key cycles asc -> desc -> off.
-  const [expenseSort, setExpenseSort] = useState<Record<string, { key: ExpenseSortKey; dir: "asc" | "desc" }>>({});
-  const cycleExpenseSort = (category: string, key: ExpenseSortKey) =>
-    setExpenseSort((prev) => {
-      const current = prev[category];
-      const next = { ...prev };
-      if (!current || current.key !== key) {
-        next[category] = { key, dir: "asc" };
-      } else if (current.dir === "asc") {
-        next[category] = { key, dir: "desc" };
-      } else {
+  // Per-category display sort. `expenseOrder` holds the saved id order per category (absent = entry
+  // order); `expenseSort` just tracks the active key/dir for the arrow indicator. Clicking a key
+  // cycles asc -> desc -> off. Each sort runs on the current display order, so sorting by one key
+  // then another keeps the earlier sort as a stable tiebreaker.
+  const [expenseOrder, setExpenseOrder] = useState<Record<string, string[]>>({});
+  const [expenseSort, setExpenseSort] = useState<Record<string, SortState<ExpenseSortKey>>>({});
+  const cycleExpenseSort = (category: string, key: ExpenseSortKey) => {
+    const dir = nextSortDir(expenseSort[category], key);
+    if (dir === null) {
+      setExpenseOrder((prev) => {
+        const next = { ...prev };
         delete next[category];
+        return next;
+      });
+      setExpenseSort((prev) => {
+        const next = { ...prev };
+        delete next[category];
+        return next;
+      });
+      return;
+    }
+    const policyName = new Map(budget.policies.map((policy) => [policy.id, policy.name]));
+    const factor = dir === "asc" ? 1 : -1;
+    const items = applyOrder(
+      budget.expenses.filter((expense) => expense.category === category),
+      expenseOrder[category] ?? [],
+      (expense) => expense.id,
+    );
+    items.sort((a, b) => {
+      if (key === "amount") {
+        return (a.amount - b.amount) * factor;
       }
-      return next;
+      const av = key === "name" ? a.name || "" : (policyName.get(a.policyId) ?? "");
+      const bv = key === "name" ? b.name || "" : (policyName.get(b.policyId) ?? "");
+      return av.localeCompare(bv) * factor;
     });
-  // Display sort for units in the "by type" view, applied within each type group. Absent = entry order.
-  const [unitSort, setUnitSort] = useState<{ key: UnitSortKey; dir: "asc" | "desc" } | null>(null);
-  const cycleUnitSort = (key: UnitSortKey) =>
-    setUnitSort((current) => {
-      if (!current || current.key !== key) {
-        return { key, dir: "asc" };
+    setExpenseOrder((prev) => ({ ...prev, [category]: items.map((expense) => expense.id) }));
+    setExpenseSort((prev) => ({ ...prev, [category]: { key, dir } }));
+  };
+  // Display sort for units in the "by type" view. `unitOrder` is the saved id order across all units
+  // (empty = entry order); sorting is applied within each type group at render. Same cascade rule.
+  const [unitOrder, setUnitOrder] = useState<string[]>([]);
+  const [unitSort, setUnitSort] = useState<SortState<UnitSortKey> | null>(null);
+  const cycleUnitSort = (key: UnitSortKey) => {
+    const dir = nextSortDir(unitSort ?? undefined, key);
+    if (dir === null) {
+      setUnitOrder([]);
+      setUnitSort(null);
+      return;
+    }
+    const ownerName = new Map(budget.owners.map((owner) => [owner.id, owner.name]));
+    const factor = dir === "asc" ? 1 : -1;
+    const items = applyOrder(budget.units, unitOrder, (unit) => unit.id);
+    items.sort((a, b) => {
+      if (key === "ci") {
+        return (a.commonInterest - b.commonInterest) * factor;
       }
-      return current.dir === "asc" ? { key, dir: "desc" } : null;
+      const av = key === "label" ? a.label : (ownerName.get(a.ownerId) ?? "");
+      const bv = key === "label" ? b.label : (ownerName.get(b.ownerId) ?? "");
+      return av.localeCompare(bv) * factor;
     });
+    setUnitOrder(items.map((unit) => unit.id));
+    setUnitSort({ key, dir });
+  };
+  // Display sort for the owners table. Same cascade rule as expenses and units.
+  const [ownerOrder, setOwnerOrder] = useState<string[]>([]);
+  const [ownerSort, setOwnerSort] = useState<SortState<OwnerSortKey> | null>(null);
+  const cycleOwnerSort = (key: OwnerSortKey) => {
+    const dir = nextSortDir(ownerSort ?? undefined, key);
+    if (dir === null) {
+      setOwnerOrder([]);
+      setOwnerSort(null);
+      return;
+    }
+    const factor = dir === "asc" ? 1 : -1;
+    const items = applyOrder(budget.owners, ownerOrder, (owner) => owner.id);
+    items.sort((a, b) => {
+      if (key === "currentMonthly") {
+        return (a.currentMonthly - b.currentMonthly) * factor;
+      }
+      return a.name.localeCompare(b.name) * factor;
+    });
+    setOwnerOrder(items.map((owner) => owner.id));
+    setOwnerSort({ key, dir });
+  };
 
   const toggleType = (key: string) =>
     setCollapsedTypes((prev) => {
@@ -263,8 +352,6 @@ function HomeContent() {
     return next;
   };
 
-  const moveOwner = (from: string, to: string, after: boolean) =>
-    patch((draft) => ({ ...draft, owners: moveItem(draft.owners, from, to, after) }));
   const movePolicy = (from: string, to: string, after: boolean) =>
     patch((draft) => ({ ...draft, policies: moveItem(draft.policies, from, to, after) }));
 
@@ -350,22 +437,9 @@ function HomeContent() {
     );
   };
 
-  const ownerNameById = new Map(budget.owners.map((owner) => [owner.id, owner.name]));
-  // Sort units within a type group. Only used in the "by type" view; "by owner" stays in entry order.
-  const sortUnits = (units: Unit[]): Unit[] => {
-    if (!unitSort) {
-      return units;
-    }
-    const factor = unitSort.dir === "asc" ? 1 : -1;
-    return [...units].sort((a, b) => {
-      if (unitSort.key === "ci") {
-        return (a.commonInterest - b.commonInterest) * factor;
-      }
-      const av = unitSort.key === "label" ? a.label : (ownerNameById.get(a.ownerId) ?? "");
-      const bv = unitSort.key === "label" ? b.label : (ownerNameById.get(b.ownerId) ?? "");
-      return av.localeCompare(bv) * factor;
-    });
-  };
+  // Order units within a type group by the saved display order. Only used in the "by type" view;
+  // "by owner" stays in entry order.
+  const sortUnits = (units: Unit[]): Unit[] => applyOrder(units, unitOrder, (unit) => unit.id);
 
   const unitGroups: { key: string; label: string; units: Unit[] }[] =
     unitView === "type"
@@ -385,7 +459,6 @@ function HomeContent() {
     unitsByOwner.set(charge.ownerId, list);
   }
   const expenseName = new Map(budget.expenses.map((expense) => [expense.id, expense.name || "(unnamed)"]));
-  const policyName = new Map(budget.policies.map((policy) => [policy.id, policy.name]));
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#f7f1e8]">
@@ -441,6 +514,28 @@ function HomeContent() {
               <span className="text-sm font-normal text-[#9a8a7b]">({budget.owners.length})</span>
             </button>
             <div className="flex flex-wrap items-center gap-2">
+              {budget.owners.length > 1 ? (
+                <div className="flex items-center gap-2">
+                  <span className={groupHeading}>Sort by</span>
+                  <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                    {(["name", "currentMonthly"] as OwnerSortKey[]).map((key) => {
+                      const active = ownerSort?.key === key;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                          aria-label={`Sort owners by ${OWNER_SORT_LABELS[key].toLowerCase()}${active ? ` (${ownerSort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
+                          onClick={() => cycleOwnerSort(key)}
+                        >
+                          {OWNER_SORT_LABELS[key]}
+                          {active ? (ownerSort.dir === "asc" ? " ↑" : " ↓") : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
               <button type="button" className={pillButton} onClick={() => addOwnerAndFocus("New owner")}>
                 Add owner
               </button>
@@ -462,47 +557,15 @@ function HomeContent() {
                 <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-[#eadccb] text-left text-xs font-semibold uppercase tracking-[0.2em] text-[#8c7b6c]">
-                      <th className="py-2 pr-2" aria-label="Reorder" />
                       <th className="py-2 pr-4">Owner name</th>
                       <th className="py-2 pr-4">Current $/mo</th>
                       <th className="py-2 pl-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {budget.owners.map((owner, index) => {
+                    {applyOrder(budget.owners, ownerOrder, (owner) => owner.id).map((owner, index) => {
                       return (
-                        <tr
-                          key={owner.id}
-                          data-owner={owner.id}
-                          className={`border-b border-[#f2e8dd] transition-opacity ${dragOwner === owner.id ? "opacity-40" : ""}`}
-                          onDragOver={(event) => {
-                            if (dragOwner) {
-                              event.preventDefault();
-                              if (dragOwner !== owner.id) {
-                                moveOwner(dragOwner, owner.id, isAfterMidpoint(event));
-                              }
-                            }
-                          }}
-                          onDrop={() => setDragOwner(null)}
-                        >
-                          <td className="py-2 pr-2 align-middle">
-                            {/* biome-ignore lint/a11y/noStaticElementInteractions: drag handle */}
-                            <span
-                              draggable
-                              onDragStart={(event) => {
-                                setDragOwner(owner.id);
-                                const row = (event.currentTarget as HTMLElement).closest("[data-owner]");
-                                if (row) {
-                                  event.dataTransfer.setDragImage(row, 20, 16);
-                                }
-                              }}
-                              onDragEnd={() => setDragOwner(null)}
-                              className="cursor-grab select-none text-[#b3a392]"
-                              title="Drag to reorder owner"
-                            >
-                              ☰
-                            </span>
-                          </td>
+                        <tr key={owner.id} className="border-b border-[#f2e8dd]">
                           <td className="py-2 pr-4 align-middle">
                             <input
                               id={`owner-name-${owner.id}`}
@@ -994,18 +1057,11 @@ function HomeContent() {
               <div className="mt-4 flex flex-col gap-5">
                 {expenseCategories.map((category) => {
                   const sort = expenseSort[category];
-                  let items = budget.expenses.filter((expense) => expense.category === category);
-                  if (sort) {
-                    const factor = sort.dir === "asc" ? 1 : -1;
-                    items = [...items].sort((a, b) => {
-                      if (sort.key === "amount") {
-                        return (a.amount - b.amount) * factor;
-                      }
-                      const av = sort.key === "name" ? a.name || "" : (policyName.get(a.policyId) ?? "");
-                      const bv = sort.key === "name" ? b.name || "" : (policyName.get(b.policyId) ?? "");
-                      return av.localeCompare(bv) * factor;
-                    });
-                  }
+                  const items = applyOrder(
+                    budget.expenses.filter((expense) => expense.category === category),
+                    expenseOrder[category] ?? [],
+                    (expense) => expense.id,
+                  );
                   return (
                     // biome-ignore lint/a11y/noStaticElementInteractions: native drag-and-drop reorder target
                     <div
