@@ -347,6 +347,19 @@ describe("serialize round-trips", () => {
     ]);
   });
 
+  it("regenerates identical ids on every decode so SSR and client hydration match", () => {
+    const encoded = serializeBudgetUrl(DEFAULT_BUDGET);
+    const a = parseBudgetUrl(encoded) as Budget;
+    const b = parseBudgetUrl(encoded) as Budget;
+    const ids = (budget: Budget) => [
+      ...budget.owners.map((o) => o.id),
+      ...budget.units.map((u) => u.id),
+      ...budget.policies.map((p) => p.id),
+      ...budget.expenses.map((e) => e.id),
+    ];
+    expect(ids(a)).toEqual(ids(b));
+  });
+
   it("returns null for empty or malformed input", () => {
     expect(parseBudgetUrl(null)).toBeNull();
     expect(parseBudgetUrl("")).toBeNull();
