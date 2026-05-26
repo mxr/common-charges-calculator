@@ -504,11 +504,11 @@ function HomeContent() {
   const renderUnitRow = (unit: Unit) => {
     return (
       <div key={unit.id} className="grid gap-2 transition-opacity sm:grid-cols-[1.2fr_1fr_0.9fr_1.4fr_auto] sm:items-center">
-        <input
+        <TextField
           className={field}
           value={unit.label}
-          onChange={(event) =>
-            patch((draft) => ({ ...draft, units: draft.units.map((u) => (u.id === unit.id ? { ...u, label: event.target.value } : u)) }))
+          onChange={(next) =>
+            patch((draft) => ({ ...draft, units: draft.units.map((u) => (u.id === unit.id ? { ...u, label: next } : u)) }))
           }
         />
         <select
@@ -688,14 +688,14 @@ function HomeContent() {
                       return (
                         <tr key={owner.id} className="border-b border-[#f2e8dd]">
                           <td className="py-2 pr-4 align-middle">
-                            <input
+                            <TextField
                               id={`owner-name-${owner.id}`}
                               className={field}
                               value={owner.name}
-                              onChange={(event) =>
+                              onChange={(next) =>
                                 patch((draft) => ({
                                   ...draft,
-                                  owners: draft.owners.map((o) => (o.id === owner.id ? { ...o, name: event.target.value } : o)),
+                                  owners: draft.owners.map((o) => (o.id === owner.id ? { ...o, name: next } : o)),
                                 }))
                               }
                               onKeyDown={(event) => handleOwnerTab(event, index === budget.owners.length - 1)}
@@ -991,13 +991,13 @@ function HomeContent() {
                           >
                             ☰
                           </span>
-                          <input
+                          <TextField
                             className={`${field} max-w-sm`}
                             value={policy.name}
-                            onChange={(event) =>
+                            onChange={(next) =>
                               patch((draft) => ({
                                 ...draft,
-                                policies: draft.policies.map((p) => (p.id === policy.id ? { ...p, name: event.target.value } : p)),
+                                policies: draft.policies.map((p) => (p.id === policy.id ? { ...p, name: next } : p)),
                               }))
                             }
                           />
@@ -1257,15 +1257,15 @@ function HomeContent() {
                       </div>
                       {items.map((expense, expenseIndex) => (
                         <div key={expense.id} className="grid gap-2 transition-opacity sm:grid-cols-[1.4fr_1fr_1.6fr_auto] sm:items-center">
-                          <input
+                          <TextField
                             id={`expense-name-${expense.id}`}
                             className={field}
                             value={expense.name}
                             placeholder="New expense"
-                            onChange={(event) =>
+                            onChange={(next) =>
                               patch((draft) => ({
                                 ...draft,
-                                expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, name: event.target.value } : e)),
+                                expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, name: next } : e)),
                               }))
                             }
                           />
@@ -1741,6 +1741,15 @@ function NumberField({
   step?: string;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft !== null) {
+      const next = Number(draft) || 0;
+      if (next !== value) {
+        onChange(next);
+      }
+    }
+    setDraft(null);
+  };
   return (
     <input
       className={className}
@@ -1748,11 +1757,14 @@ function NumberField({
       step={step}
       value={draft ?? String(value)}
       onFocus={() => setDraft(value === 0 ? "" : String(value))}
-      onChange={(event) => {
-        setDraft(event.target.value);
-        onChange(Number(event.target.value) || 0);
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
       }}
-      onBlur={() => setDraft(null)}
     />
   );
 }
@@ -1760,6 +1772,15 @@ function NumberField({
 // Currency input with a $ prefix: ignores a typed $, shows 2 decimals when idle, raw value while editing.
 function CurrencyField({ value, onChange, className }: { value: number; onChange: (next: number) => void; className: string }) {
   const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft !== null) {
+      const next = Number(draft.replace(/[$,]/g, "")) || 0;
+      if (next !== value) {
+        onChange(next);
+      }
+    }
+    setDraft(null);
+  };
   return (
     <div className="relative">
       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#8a7768]">$</span>
@@ -1769,11 +1790,14 @@ function CurrencyField({ value, onChange, className }: { value: number; onChange
         inputMode="decimal"
         value={draft ?? value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         onFocus={() => setDraft(value === 0 ? "" : String(value))}
-        onChange={(event) => {
-          setDraft(event.target.value.replace(/\$/g, ""));
-          onChange(Number(event.target.value.replace(/[$,]/g, "")) || 0);
+        onChange={(event) => setDraft(event.target.value.replace(/\$/g, ""))}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            event.currentTarget.blur();
+          }
         }}
-        onBlur={() => setDraft(null)}
       />
     </div>
   );
@@ -1792,6 +1816,16 @@ function PercentField({
   step?: string;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft !== null) {
+      const parsed = Number(draft);
+      const next = Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 0;
+      if (next !== value) {
+        onChange(next);
+      }
+    }
+    setDraft(null);
+  };
   return (
     <input
       className={className}
@@ -1801,12 +1835,14 @@ function PercentField({
       step={step}
       value={draft ?? String(value)}
       onFocus={() => setDraft(value === 0 ? "" : String(value))}
-      onChange={(event) => {
-        setDraft(event.target.value);
-        const parsed = Number(event.target.value);
-        onChange(Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 0);
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
       }}
-      onBlur={() => setDraft(null)}
     />
   );
 }
@@ -1814,6 +1850,15 @@ function PercentField({
 // Common-interest input: shows 4 decimals (with trailing zeros) when idle, raw value while editing.
 function CiInput({ value, onChange, className }: { value: number; onChange: (next: number) => void; className: string }) {
   const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft !== null) {
+      const next = Number(draft.replace(/%/g, "")) || 0;
+      if (next !== value) {
+        onChange(next);
+      }
+    }
+    setDraft(null);
+  };
   return (
     <input
       className={className}
@@ -1821,11 +1866,57 @@ function CiInput({ value, onChange, className }: { value: number; onChange: (nex
       inputMode="decimal"
       value={draft ?? formatCi(value)}
       onFocus={() => setDraft(value === 0 ? "" : String(value))}
-      onChange={(event) => {
-        setDraft(event.target.value);
-        onChange(Number(event.target.value.replace(/%/g, "")) || 0);
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
       }}
-      onBlur={() => setDraft(null)}
+    />
+  );
+}
+
+// Text input that buffers typing locally and commits on blur or Enter, so the
+// expensive budget recompute only runs once you leave the field.
+function TextField({
+  value,
+  onChange,
+  className,
+  id,
+  placeholder,
+  onKeyDown,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  className: string;
+  id?: string;
+  placeholder?: string;
+  onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft !== null && draft !== value) {
+      onChange(draft);
+    }
+    setDraft(null);
+  };
+  return (
+    <input
+      id={id}
+      className={className}
+      placeholder={placeholder}
+      value={draft ?? value}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
+        onKeyDown?.(event);
+      }}
     />
   );
 }
