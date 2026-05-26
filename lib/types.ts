@@ -40,6 +40,23 @@ export type Unit = {
   ownerId: string;
 };
 
+// Whether a unit type is a primary dwelling or an ancillary space (storage, parking, etc.).
+// Bookkeeping only for now; it does not affect how charges are computed.
+export type UnitClassification = "primary" | "ancillary";
+
+export const UNIT_CLASSIFICATIONS: UnitClassification[] = ["primary", "ancillary"];
+
+export const UNIT_CLASSIFICATION_LABELS: Record<UnitClassification, string> = {
+  primary: "Primary",
+  ancillary: "Ancillary",
+};
+
+// A unit type is referenced by its `name` everywhere else (units, policy rules, offsets).
+export type UnitType = {
+  name: string;
+  classification: UnitClassification;
+};
+
 export type Expense = {
   id: string;
   name: string;
@@ -69,7 +86,7 @@ export type Adjustments = {
 export type Budget = {
   owners: Owner[];
   units: Unit[];
-  unitTypes: string[];
+  unitTypes: UnitType[];
   categories: string[];
   expenses: Expense[];
   policies: Policy[];

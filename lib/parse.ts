@@ -1,10 +1,41 @@
 import { makeId } from "./budget";
-import type { Owner, Unit } from "./types";
+import type { Owner, Unit, UnitClassification, UnitType } from "./types";
 
 export type SkippedLine = { line: string; reason: string };
 
 export type ParsedOwners = { owners: Owner[]; skipped: SkippedLine[] };
 export type ParsedUnits = { units: Unit[]; skipped: SkippedLine[] };
+export type ParsedUnitTypes = { unitTypes: UnitType[]; skipped: SkippedLine[] };
+
+// Each line is "name, classification" (comma or tab separated). Classification is optional and
+// defaults to primary; it accepts "primary"/"p" or "ancillary"/"a" (case-insensitive).
+export const parseUnitTypeLines = (text: string): ParsedUnitTypes => {
+  const unitTypes: UnitType[] = [];
+  const skipped: SkippedLine[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) {
+      continue;
+    }
+    const [name = "", classRaw = ""] = line.split(/\s*,\s*|\t+/).map((part) => part.trim());
+    if (!name) {
+      skipped.push({ line, reason: "expected: name, classification" });
+      continue;
+    }
+    const normalized = classRaw.toLowerCase();
+    let classification: UnitClassification;
+    if (normalized === "" || normalized === "primary" || normalized === "p") {
+      classification = "primary";
+    } else if (normalized === "ancillary" || normalized === "a") {
+      classification = "ancillary";
+    } else {
+      skipped.push({ line, reason: `unknown classification "${classRaw}"` });
+      continue;
+    }
+    unitTypes.push({ name, classification });
+  }
+  return { unitTypes, skipped };
+};
 
 // Each line is "name, current monthly" (comma or tab separated). The amount is optional
 // and may have a $ prefix. Exclusion is not supported in batch input.
