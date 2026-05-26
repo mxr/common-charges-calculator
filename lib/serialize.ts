@@ -1,5 +1,5 @@
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from "lz-string";
-import { makeId, normalizeBudget } from "./budget";
+import { normalizeBudget } from "./budget";
 import { ALLOCATION_METHODS } from "./types";
 import type { Budget, UnitType } from "./types";
 
@@ -70,15 +70,18 @@ const unpack = (packed: Packed): Budget => {
   const resolveType = (ref: Ref): string => (typeof ref === "number" ? (unitTypeList[ref]?.name ?? "") : ref);
   const resolveCategory = (ref: Ref): string => (typeof ref === "number" ? (categories[ref] ?? "") : ref);
 
-  const ownerIds = owners.map(() => makeId("owner"));
-  const policyIds = policies.map(() => makeId("policy"));
+  // Derive ids deterministically from position rather than makeId(): unpack runs on both the server
+  // and the client when a budget loads from the `?b=` param, and makeId() (Date.now + counter) would
+  // produce different ids each run, causing a React hydration mismatch.
+  const ownerIds = owners.map((_, i) => `owner-${i}`);
+  const policyIds = policies.map((_, i) => `policy-${i}`);
 
   return normalizeBudget({
     unitTypes: unitTypeList,
     categories,
     owners: owners.map(([name, excluded, currentMonthly], i) => ({ id: ownerIds[i], name, excluded: excluded === 1, currentMonthly })),
-    units: units.map(([label, type, commonInterest, ownerRef]) => ({
-      id: makeId("unit"),
+    units: units.map(([label, type, commonInterest, ownerRef], i) => ({
+      id: `unit-${i}`,
       label,
       type: resolveType(type),
       commonInterest,
@@ -93,8 +96,8 @@ const unpack = (packed: Packed): Budget => {
         method: ALLOCATION_METHODS[methodIdx] ?? ALLOCATION_METHODS[0],
       })),
     })),
-    expenses: expenses.map(([name, category, amount, policyRef]) => ({
-      id: makeId("exp"),
+    expenses: expenses.map(([name, category, amount, policyRef], i) => ({
+      id: `exp-${i}`,
       name,
       category: resolveCategory(category),
       amount,
