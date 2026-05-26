@@ -20,7 +20,7 @@ export const DEFAULT_BUDGET: Budget = {
     { id: "owner-board", name: "Board", excluded: true, currentMonthly: 0 },
   ],
   // Several units per type share the same common interest, and types mix owners, so sorting by
-  // common interest then label, or owner then number, exercises the stable multi-key sort.
+  // common interest then label, or owner then number, shows the earlier sort surviving as ties break.
   units: [
     { id: "unit-1a", label: "1A", type: "Residential", commonInterest: 12, ownerId: "owner-alice" },
     { id: "unit-1b", label: "1B", type: "Residential", commonInterest: 8, ownerId: "owner-bob" },
