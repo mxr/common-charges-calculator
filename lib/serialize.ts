@@ -1,7 +1,7 @@
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from "lz-string";
 import { makeId, normalizeBudget } from "./budget";
 import { ALLOCATION_METHODS } from "./types";
-import type { Budget } from "./types";
+import type { Budget, UnitType } from "./types";
 
 // Packed form for the `?b=` param: a positional array with no object keys and no ids.
 // Cross-references (owner, policy, unit type, category) are stored as integer indices,
@@ -10,24 +10,27 @@ import type { Budget } from "./types";
 // imported budget with an orphan type), and to -1 when an owner/policy id resolves to nothing.
 type Ref = number | string;
 type PackedOwner = [string, 0 | 1, number];
+// [name, classification] where 0 = primary, 1 = ancillary. A bare string is also accepted on read
+// for budgets shared before classifications existed.
+type PackedUnitType = [string, 0 | 1];
 type PackedUnit = [string, Ref, number, number];
 type PackedRule = [Ref[], number, number];
 type PackedPolicy = [string, PackedRule[]];
 type PackedExpense = [string, Ref, number, number];
 type PackedAdjustments = [number, number, Array<[Ref, number]>, number];
-type Packed = [string[], string[], PackedOwner[], PackedUnit[], PackedPolicy[], PackedExpense[], PackedAdjustments];
+type Packed = [PackedUnitType[], string[], PackedOwner[], PackedUnit[], PackedPolicy[], PackedExpense[], PackedAdjustments];
 
 const pack = (budget: Budget): Packed => {
   const ownerIndex = new Map(budget.owners.map((owner, i) => [owner.id, i]));
   const policyIndex = new Map(budget.policies.map((policy, i) => [policy.id, i]));
-  const typeIndex = new Map(budget.unitTypes.map((type, i) => [type, i]));
+  const typeIndex = new Map(budget.unitTypes.map((type, i) => [type.name, i]));
   const categoryIndex = new Map(budget.categories.map((category, i) => [category, i]));
 
   const typeRef = (type: string): Ref => typeIndex.get(type) ?? type;
   const adjustments = budget.adjustments;
 
   return [
-    budget.unitTypes,
+    budget.unitTypes.map((type) => [type.name, type.classification === "ancillary" ? 1 : 0] as PackedUnitType),
     budget.categories,
     budget.owners.map((owner) => [owner.name, owner.excluded ? 1 : 0, owner.currentMonthly] as PackedOwner),
     budget.units.map((unit) => [unit.label, typeRef(unit.type), unit.commonInterest, ownerIndex.get(unit.ownerId) ?? -1] as PackedUnit),
@@ -58,14 +61,20 @@ const pack = (budget: Budget): Packed => {
 
 const unpack = (packed: Packed): Budget => {
   const [unitTypes, categories, owners, units, policies, expenses, adjustments] = packed;
-  const resolveType = (ref: Ref): string => (typeof ref === "number" ? (unitTypes[ref] ?? "") : ref);
+  // A legacy entry may be a bare string instead of [name, classification].
+  const unitTypeList: UnitType[] = (unitTypes as Array<PackedUnitType | string>).map((entry) =>
+    typeof entry === "string"
+      ? { name: entry, classification: "primary" }
+      : { name: entry[0], classification: entry[1] === 1 ? "ancillary" : "primary" },
+  );
+  const resolveType = (ref: Ref): string => (typeof ref === "number" ? (unitTypeList[ref]?.name ?? "") : ref);
   const resolveCategory = (ref: Ref): string => (typeof ref === "number" ? (categories[ref] ?? "") : ref);
 
   const ownerIds = owners.map(() => makeId("owner"));
   const policyIds = policies.map(() => makeId("policy"));
 
   return normalizeBudget({
-    unitTypes,
+    unitTypes: unitTypeList,
     categories,
     owners: owners.map(([name, excluded, currentMonthly], i) => ({ id: ownerIds[i], name, excluded: excluded === 1, currentMonthly })),
     units: units.map(([label, type, commonInterest, ownerRef]) => ({

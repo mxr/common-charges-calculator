@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { computeCharges } from "../lib/allocate";
 import { DEFAULT_BUDGET, makeId, normalizeBudget, validateBudget } from "../lib/budget";
 import { formatCurrency, formatPercent, toNumber } from "../lib/format";
-import { parseOwnerLines, parseUnitLines } from "../lib/parse";
+import { parseOwnerLines, parseUnitLines, parseUnitTypeLines } from "../lib/parse";
 import { exportBudgetJson, parseBudgetJson, parseBudgetUrl, serializeBudgetUrl } from "../lib/serialize";
 import type { Budget } from "../lib/types";
 
@@ -16,10 +16,15 @@ const unit = (id: string, type: string, commonInterest: number, ownerId: string)
   ownerId,
 });
 
+const ut = (name: string, classification: Budget["unitTypes"][number]["classification"] = "primary"): Budget["unitTypes"][number] => ({
+  name,
+  classification,
+});
+
 const makeBudget = (overrides: Partial<Budget>): Budget => ({
   owners: [owner("o1")],
   units: [unit("u1", "residential", 100, "o1")],
-  unitTypes: ["residential", "commercial"],
+  unitTypes: [ut("residential"), ut("commercial")],
   categories: ["general"],
   policies: [{ id: "p", name: "standard", rules: [{ unitTypes: ["residential", "commercial"], weight: 100, method: "common_interest" }] }],
   expenses: [{ id: "e", name: "exp", category: "general", amount: 100, policyId: "p" }],
@@ -262,7 +267,7 @@ describe("validateBudget", () => {
 
   it("warns when a unit type or category is unused", () => {
     const budget = makeBudget({
-      unitTypes: ["residential", "commercial"],
+      unitTypes: [ut("residential"), ut("commercial")],
       categories: ["general", "extra"],
     });
     const warnings = validateBudget(budget);
@@ -298,7 +303,7 @@ describe("normalizeBudget", () => {
       units: [{ commonInterest: "40", type: "residential" }],
       policies: [{ rules: [{ weight: "10", method: "bogus" }] }, { name: "Empty", rules: [] }],
       expenses: [{ amount: "500" }],
-      unitTypes: ["residential", 7],
+      unitTypes: ["residential", 7, { name: "commercial", classification: "ancillary" }, { classification: "primary" }],
       adjustments: { inflationPct: "3", offsets: [{ unitType: "commercial", pct: "-5" }] },
     });
     expect(budget.owners[0].id).toMatch(/^owner-/);
@@ -308,7 +313,10 @@ describe("normalizeBudget", () => {
     expect(budget.policies[0].rules[0].method).toBe("common_interest");
     expect(budget.policies[1].rules).toHaveLength(1);
     expect(budget.expenses[0].amount).toBe(500);
-    expect(budget.unitTypes).toEqual(["residential"]);
+    expect(budget.unitTypes).toEqual([
+      { name: "residential", classification: "primary" },
+      { name: "commercial", classification: "ancillary" },
+    ]);
     expect(budget.adjustments.inflationPct).toBe(3);
     expect(budget.adjustments.offsets).toEqual([{ unitType: "commercial", pct: -5 }]);
   });
@@ -330,6 +338,15 @@ describe("serialize round-trips", () => {
     expect(parseBudgetJson(json)).toEqual(DEFAULT_BUDGET);
   });
 
+  it("preserves unit-type classifications through the packed encoding", () => {
+    const budget = makeBudget({ unitTypes: [ut("residential", "primary"), ut("storage", "ancillary")] });
+    const parsed = parseBudgetUrl(serializeBudgetUrl(budget)) as Budget;
+    expect(parsed.unitTypes).toEqual([
+      { name: "residential", classification: "primary" },
+      { name: "storage", classification: "ancillary" },
+    ]);
+  });
+
   it("returns null for empty or malformed input", () => {
     expect(parseBudgetUrl(null)).toBeNull();
     expect(parseBudgetUrl("")).toBeNull();
@@ -341,7 +358,7 @@ describe("serialize round-trips", () => {
     // commercial type, the "p2" policy and "ghost" owner are not in their lookup lists, so the
     // packed form stores them as string/-1 fallbacks rather than indices.
     const budget = makeBudget({
-      unitTypes: ["residential"],
+      unitTypes: [ut("residential")],
       categories: ["general"],
       owners: [owner("o1")],
       units: [unit("u1", "commercial", 100, "ghost")],
@@ -417,6 +434,19 @@ describe("batch parsing", () => {
       'invalid common interest "abc"',
       'unknown owner "Ghost"',
     ]);
+  });
+
+  it("parses unit types with an optional classification and skips bad ones", () => {
+    const text = ["Residential, primary", "Storage,\tancillary", "  Garage  ", "Cabana, p", "Lobby, a", "", "Penthouse, deluxe"].join("\n");
+    const { unitTypes, skipped } = parseUnitTypeLines(text);
+    expect(unitTypes).toEqual([
+      { name: "Residential", classification: "primary" },
+      { name: "Storage", classification: "ancillary" },
+      { name: "Garage", classification: "primary" },
+      { name: "Cabana", classification: "primary" },
+      { name: "Lobby", classification: "ancillary" },
+    ]);
+    expect(skipped.map((entry) => entry.reason)).toEqual(['unknown classification "deluxe"']);
   });
 });
 

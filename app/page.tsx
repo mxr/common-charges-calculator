@@ -5,11 +5,11 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { computeCharges } from "../lib/allocate";
 import { DEFAULT_BUDGET, makeId, validateBudget } from "../lib/budget";
 import { formatCurrency } from "../lib/format";
-import { parseOwnerLines, parseUnitLines } from "../lib/parse";
+import { parseOwnerLines, parseUnitLines, parseUnitTypeLines } from "../lib/parse";
 import { exportBudgetJson, parseBudgetJson, parseBudgetUrl, serializeBudgetUrl } from "../lib/serialize";
-import { ALLOCATION_METHOD_LABELS, ALLOCATION_METHODS } from "../lib/types";
+import { ALLOCATION_METHOD_LABELS, ALLOCATION_METHODS, UNIT_CLASSIFICATION_LABELS, UNIT_CLASSIFICATIONS } from "../lib/types";
 import type { UnitCharge } from "../lib/allocate";
-import type { Budget, Expense, Owner, Unit } from "../lib/types";
+import type { Budget, Expense, Owner, Unit, UnitClassification, UnitType } from "../lib/types";
 
 const card = "rounded-3xl border border-[#e7d7c8] bg-white/80 p-6 shadow-[0_20px_60px_rgba(120,96,77,0.12)] backdrop-blur";
 const sectionTitle = "text-2xl font-semibold text-[#181716]";
@@ -50,6 +50,13 @@ type OwnerSortKey = "name" | "currentMonthly";
 const OWNER_SORT_LABELS: Record<OwnerSortKey, string> = {
   name: "Name",
   currentMonthly: "Current $/mo",
+};
+
+type UnitTypeSortKey = "name" | "classification";
+
+const UNIT_TYPE_SORT_LABELS: Record<UnitTypeSortKey, string> = {
+  name: "Name",
+  classification: "Classification",
 };
 
 type SortState<K> = { key: K; dir: "asc" | "desc" };
@@ -102,6 +109,14 @@ function compareOwners(a: Owner, b: Owner, key: OwnerSortKey, dir: "asc" | "desc
   return a.name.localeCompare(b.name) * factor;
 }
 
+function compareUnitTypes(a: UnitType, b: UnitType, key: UnitTypeSortKey, dir: "asc" | "desc"): number {
+  const factor = dir === "asc" ? 1 : -1;
+  if (key === "classification") {
+    return a.classification.localeCompare(b.classification) * factor;
+  }
+  return a.name.localeCompare(b.name) * factor;
+}
+
 // Reorder by the saved order (preserving cascade), then sort by `compare`, returning the new id order.
 function deriveOrder<T>(items: T[], prevOrder: string[], idOf: (item: T) => string, compare: (a: T, b: T) => number): string[] {
   const ordered = applyOrder(items, prevOrder, idOf);
@@ -112,16 +127,18 @@ function deriveOrder<T>(items: T[], prevOrder: string[], idOf: (item: T) => stri
 type SortParam = {
   owner: SortState<OwnerSortKey> | null;
   unit: SortState<UnitSortKey> | null;
+  unitType: SortState<UnitTypeSortKey> | null;
   expenses: Record<string, SortState<ExpenseSortKey>>;
 };
 
 // Sort state survives a refresh via the `s` URL param. Only the active key/dir per group is stored;
 // the display order is re-derived on load (a single stored sort reproduces its order exactly).
-// Token forms: `o:<key>:<dir>`, `u:<key>:<dir>`, `e:<encodedCategory>:<key>:<dir>`, joined by ",".
-// encodeURIComponent escapes both ":" and "," so categories never collide with the delimiters.
+// Token forms: `o:<key>:<dir>`, `u:<key>:<dir>`, `ut:<key>:<dir>`, `e:<encodedCategory>:<key>:<dir>`,
+// joined by ",". encodeURIComponent escapes both ":" and "," so categories never collide with the delimiters.
 function serializeSortParam(
   owner: SortState<OwnerSortKey> | null,
   unit: SortState<UnitSortKey> | null,
+  unitType: SortState<UnitTypeSortKey> | null,
   expenses: Record<string, SortState<ExpenseSortKey>>,
 ): string {
   const tokens: string[] = [];
@@ -131,6 +148,9 @@ function serializeSortParam(
   if (unit) {
     tokens.push(`u:${unit.key}:${unit.dir}`);
   }
+  if (unitType) {
+    tokens.push(`ut:${unitType.key}:${unitType.dir}`);
+  }
   for (const [category, sort] of Object.entries(expenses)) {
     tokens.push(`e:${encodeURIComponent(category)}:${sort.key}:${sort.dir}`);
   }
@@ -138,7 +158,7 @@ function serializeSortParam(
 }
 
 function parseSortParam(raw: string): SortParam {
-  const result: SortParam = { owner: null, unit: null, expenses: {} };
+  const result: SortParam = { owner: null, unit: null, unitType: null, expenses: {} };
   for (const token of raw.split(",").filter(Boolean)) {
     const parts = token.split(":");
     if (parts[0] === "o" && parts.length === 3) {
@@ -150,6 +170,11 @@ function parseSortParam(raw: string): SortParam {
       const [, key, dir] = parts;
       if ((key === "label" || key === "ci" || key === "owner") && (dir === "asc" || dir === "desc")) {
         result.unit = { key, dir };
+      }
+    } else if (parts[0] === "ut" && parts.length === 3) {
+      const [, key, dir] = parts;
+      if ((key === "name" || key === "classification") && (dir === "asc" || dir === "desc")) {
+        result.unitType = { key, dir };
       }
     } else if (parts[0] === "e" && parts.length === 4) {
       const [, category, key, dir] = parts;
@@ -196,7 +221,7 @@ function HomeContent() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [copied, setCopied] = useState(false);
   const [unitView, setUnitView] = useState<"type" | "owner">("type");
-  const [batch, setBatch] = useState<"owner" | "unit" | null>(null);
+  const [batch, setBatch] = useState<"owner" | "unit" | "unitType" | null>(null);
   const collapsedInit = new Set((searchParams.get("c") ?? "").split(",").filter(Boolean));
   const [collapsedOwners, setCollapsedOwners] = useState(collapsedInit.has("owners"));
   const [collapsedUnits, setCollapsedUnits] = useState(collapsedInit.has("units"));
@@ -281,6 +306,48 @@ function HomeContent() {
 
   const applyBatchUnits = (units: Unit[], replaceAll: boolean) =>
     patch((draft) => ({ ...draft, units: replaceAll ? units : [...draft.units, ...units] }));
+
+  const applyBatchUnitTypes = (unitTypes: UnitType[], replaceAll: boolean) =>
+    patch((draft) => ({ ...draft, unitTypes: replaceAll ? unitTypes : [...draft.unitTypes, ...unitTypes] }));
+
+  // Add a new unit type, focusing its name input once rendered. New names sort to the end of the
+  // saved display order, so the focus index is the current count.
+  const addUnitTypeAndFocus = (name: string) => {
+    const index = budget.unitTypes.length;
+    patch((draft) => ({ ...draft, unitTypes: [...draft.unitTypes, { name, classification: "primary" }] }));
+    window.setTimeout(() => document.getElementById(`unittype-name-${index}`)?.focus(), 0);
+  };
+
+  const handleUnitTypeTab = (event: React.KeyboardEvent<HTMLInputElement>, isLast: boolean) => {
+    if (event.key !== "Tab" || event.shiftKey || !isLast) {
+      return;
+    }
+    event.preventDefault();
+    addUnitTypeAndFocus("");
+  };
+
+  // Rename a unit type and carry the new name onto every reference (units, policy rules, offsets, and
+  // the saved sort order), since types are referenced by name.
+  const renameUnitType = (from: string, to: string) => {
+    const next = to.trim();
+    if (!next || next === from) {
+      return;
+    }
+    patch((draft) => ({
+      ...draft,
+      unitTypes: draft.unitTypes.map((type) => (type.name === from ? { ...type, name: next } : type)),
+      units: draft.units.map((unit) => (unit.type === from ? { ...unit, type: next } : unit)),
+      policies: draft.policies.map((policy) => ({
+        ...policy,
+        rules: policy.rules.map((rule) => ({ ...rule, unitTypes: rule.unitTypes.map((type) => (type === from ? next : type)) })),
+      })),
+      adjustments: {
+        ...draft.adjustments,
+        offsets: (draft.adjustments.offsets ?? []).map((offset) => (offset.unitType === from ? { ...offset, unitType: next } : offset)),
+      },
+    }));
+    setUnitTypeOrder((prev) => prev.map((name) => (name === from ? next : name)));
+  };
 
   const addExpenseAndFocus = (category: string) => {
     const id = makeId("exp");
@@ -401,8 +468,39 @@ function HomeContent() {
     );
     setOwnerSort({ key, dir });
   };
+  // Display sort for the unit types table. Same cascade rule as the other sections.
+  const [unitTypeSort, setUnitTypeSort] = useState<SortState<UnitTypeSortKey> | null>(sortInit.unitType);
+  const [unitTypeOrder, setUnitTypeOrder] = useState<string[]>(() => {
+    if (!sortInit.unitType) {
+      return [];
+    }
+    const { key, dir } = sortInit.unitType;
+    return deriveOrder(
+      budget.unitTypes,
+      [],
+      (type) => type.name,
+      (a, b) => compareUnitTypes(a, b, key, dir),
+    );
+  });
+  const cycleUnitTypeSort = (key: UnitTypeSortKey) => {
+    const dir = nextSortDir(unitTypeSort ?? undefined, key);
+    if (dir === null) {
+      setUnitTypeOrder([]);
+      setUnitTypeSort(null);
+      return;
+    }
+    setUnitTypeOrder(
+      deriveOrder(
+        budget.unitTypes,
+        unitTypeOrder,
+        (type) => type.name,
+        (a, b) => compareUnitTypes(a, b, key, dir),
+      ),
+    );
+    setUnitTypeSort({ key, dir });
+  };
 
-  const sortParam = serializeSortParam(ownerSort, unitSort, expenseSort);
+  const sortParam = serializeSortParam(ownerSort, unitSort, unitTypeSort, expenseSort);
   useEffect(
     function syncUrlState() {
       if (
@@ -519,8 +617,8 @@ function HomeContent() {
           }
         >
           {budget.unitTypes.map((type) => (
-            <option key={type} value={type}>
-              {type}
+            <option key={type.name} value={type.name}>
+              {type.name}
             </option>
           ))}
         </select>
@@ -562,9 +660,14 @@ function HomeContent() {
   // "by owner" stays in entry order.
   const sortUnits = (units: Unit[]): Unit[] => applyOrder(units, unitOrder, (unit) => unit.id);
 
-  const unitGroups: { key: string; label: string; units: Unit[] }[] =
+  const unitGroups: { key: string; label: string; classification?: UnitClassification; units: Unit[] }[] =
     unitView === "type"
-      ? budget.unitTypes.map((type) => ({ key: type, label: type, units: sortUnits(budget.units.filter((unit) => unit.type === type)) }))
+      ? budget.unitTypes.map((type) => ({
+          key: type.name,
+          label: type.name,
+          classification: type.classification,
+          units: sortUnits(budget.units.filter((unit) => unit.type === type.name)),
+        }))
       : budget.owners.map((owner) => ({
           key: owner.id,
           label: owner.name,
@@ -752,6 +855,123 @@ function HomeContent() {
           )}
         </section>
 
+        {/* Unit types */}
+        <section className={card}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              className={`${sectionTitle} flex items-center gap-2`}
+              onClick={() => setCollapsedUnitTypes((value) => !value)}
+            >
+              <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedUnitTypes ? "▸" : "▾"}</span>
+              Unit types
+              <span className="text-sm font-normal text-[#9a8a7b]">({budget.unitTypes.length})</span>
+            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {budget.unitTypes.length > 1 ? (
+                <div className="flex items-center gap-2">
+                  <span className={groupHeading}>Sort by</span>
+                  <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                    {(["name", "classification"] as UnitTypeSortKey[]).map((key) => {
+                      const active = unitTypeSort?.key === key;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                          aria-label={`Sort unit types by ${UNIT_TYPE_SORT_LABELS[key].toLowerCase()}${active ? ` (${unitTypeSort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
+                          onClick={() => cycleUnitTypeSort(key)}
+                        >
+                          {UNIT_TYPE_SORT_LABELS[key]}
+                          {active ? (unitTypeSort.dir === "asc" ? " ↑" : " ↓") : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+              <button type="button" className={pillButton} onClick={() => addUnitTypeAndFocus("New type")}>
+                Add unit type
+              </button>
+              <button type="button" className={pillButton} onClick={() => setBatch("unitType")}>
+                Batch add
+              </button>
+              <button type="button" className={dangerButton} onClick={() => patch((draft) => ({ ...draft, unitTypes: [] }))}>
+                Delete all
+              </button>
+            </div>
+          </div>
+          {collapsedUnitTypes ? null : (
+            <>
+              <p className={`${sectionHint} mt-1`}>
+                Unit types are referenced by units, policies, and offsets. Classification (Primary or Ancillary) is for bookkeeping only and
+                does not affect charges yet.
+              </p>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-[#eadccb] text-left text-xs font-semibold uppercase tracking-[0.2em] text-[#8c7b6c]">
+                      <th className="py-2 pr-4">Type name</th>
+                      <th className="py-2 pr-4">Classification</th>
+                      <th className="py-2 pl-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {applyOrder(budget.unitTypes, unitTypeOrder, (type) => type.name).map((type, index) => (
+                      <tr key={type.name} className="border-b border-[#f2e8dd]">
+                        <td className="py-2 pr-4 align-middle">
+                          <TextField
+                            id={`unittype-name-${index}`}
+                            className={field}
+                            value={type.name}
+                            onChange={(next) => renameUnitType(type.name, next)}
+                            onKeyDown={(event) => handleUnitTypeTab(event, index === budget.unitTypes.length - 1)}
+                          />
+                        </td>
+                        <td className="py-2 pr-4 align-middle">
+                          <select
+                            className={`${fieldBase} w-40`}
+                            value={type.classification}
+                            onChange={(event) =>
+                              patch((draft) => ({
+                                ...draft,
+                                unitTypes: draft.unitTypes.map((t) =>
+                                  t.name === type.name ? { ...t, classification: event.target.value as UnitClassification } : t,
+                                ),
+                              }))
+                            }
+                          >
+                            {UNIT_CLASSIFICATIONS.map((classification) => (
+                              <option key={classification} value={classification}>
+                                {UNIT_CLASSIFICATION_LABELS[classification]}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="py-2 pl-4 align-middle">
+                          <div className="flex items-center justify-end">
+                            <button
+                              type="button"
+                              className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                              aria-label="Remove unit type"
+                              onClick={() =>
+                                patch((draft) => ({ ...draft, unitTypes: draft.unitTypes.filter((t) => t.name !== type.name) }))
+                              }
+                            >
+                              <TrashIcon />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {budget.unitTypes.length === 0 ? <p className="mt-3 text-sm italic text-[#9a8a7b]">No unit types.</p> : null}
+              </div>
+            </>
+          )}
+        </section>
+
         {/* Units */}
         <section className={card}>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -776,7 +996,7 @@ function HomeContent() {
                       {
                         id: makeId("unit"),
                         label: "New unit",
-                        type: draft.unitTypes[0] ?? "",
+                        type: draft.unitTypes[0]?.name ?? "",
                         commonInterest: 0,
                         ownerId: draft.owners[0]?.id ?? "",
                       },
@@ -806,47 +1026,6 @@ function HomeContent() {
                   <span className="font-semibold text-[#b44b43]"> Off from 100% - double-check the Unit definitions.</span>
                 ) : null}
               </p>
-              <div className="mt-4 rounded-2xl border border-[#f2e8dd] bg-[#fffaf3] p-4">
-                <button
-                  type="button"
-                  className="flex items-center gap-2 text-sm font-semibold text-[#3f372f]"
-                  onClick={() => setCollapsedUnitTypes((value) => !value)}
-                >
-                  <span className="text-lg leading-none text-[#8c7b6c]">{collapsedUnitTypes ? "▸" : "▾"}</span>
-                  Unit types
-                  <span className="text-xs font-normal text-[#9a8a7b]">({budget.unitTypes.length})</span>
-                </button>
-                {collapsedUnitTypes ? null : (
-                  <>
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-                      <InlineAdd
-                        placeholder="Add unit type"
-                        onAdd={(value) =>
-                          patch((draft) => (draft.unitTypes.includes(value) ? draft : { ...draft, unitTypes: [...draft.unitTypes, value] }))
-                        }
-                      />
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        {budget.unitTypes.map((type) => (
-                          <span
-                            key={type}
-                            className="inline-flex items-center gap-2 rounded-full border border-[#e6d7c7] bg-white px-3 py-1 text-xs text-[#4a4037]"
-                          >
-                            {type}
-                            <button
-                              type="button"
-                              className="text-[#c0443c]"
-                              aria-label={`Remove ${type}`}
-                              onClick={() => patch((draft) => ({ ...draft, unitTypes: draft.unitTypes.filter((item) => item !== type) }))}
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
               <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3">
                 <div className="flex items-center gap-2">
                   <span className={groupHeading}>Grouping</span>
@@ -906,7 +1085,14 @@ function HomeContent() {
                         ) : (
                           <span className={groupHeading}>{group.label || "—"}</span>
                         )}
-                        <span className="text-xs text-[#9a8a7b]">{formatCi(groupCi)}%</span>
+                        <div className="flex items-center gap-2">
+                          {group.classification ? (
+                            <span className="rounded-full border border-[#e6d7c7] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#8c7b6c]">
+                              {UNIT_CLASSIFICATION_LABELS[group.classification]}
+                            </span>
+                          ) : null}
+                          <span className="text-xs text-[#9a8a7b]">{formatCi(groupCi)}%</span>
+                        </div>
                       </div>
                       {collapsed ? null : group.units.length === 0 ? (
                         <p className="text-sm italic text-[#9a8a7b]">No units.</p>
@@ -1077,10 +1263,10 @@ function HomeContent() {
                                   ))}
                                 </select>
                                 {budget.unitTypes.map((type) => (
-                                  <label key={type} className="flex items-center gap-1 text-xs text-[#5b5148]">
+                                  <label key={type.name} className="flex items-center gap-1 text-xs text-[#5b5148]">
                                     <input
                                       type="checkbox"
-                                      checked={rule.unitTypes.includes(type)}
+                                      checked={rule.unitTypes.includes(type.name)}
                                       onChange={(event) =>
                                         patch((draft) => ({
                                           ...draft,
@@ -1093,8 +1279,8 @@ function HomeContent() {
                                                       ? {
                                                           ...r,
                                                           unitTypes: event.target.checked
-                                                            ? [...r.unitTypes, type]
-                                                            : r.unitTypes.filter((item) => item !== type),
+                                                            ? [...r.unitTypes, type.name]
+                                                            : r.unitTypes.filter((item) => item !== type.name),
                                                         }
                                                       : r,
                                                   ),
@@ -1104,7 +1290,7 @@ function HomeContent() {
                                         }))
                                       }
                                     />
-                                    {type}
+                                    {type.name}
                                   </label>
                                 ))}
                                 {rule.unitTypes.length === 0 ? (
@@ -1376,7 +1562,7 @@ function HomeContent() {
                   ...draft,
                   adjustments: {
                     ...draft.adjustments,
-                    offsets: [...(draft.adjustments.offsets ?? []), { unitType: draft.unitTypes[0] ?? "", pct: 0 }],
+                    offsets: [...(draft.adjustments.offsets ?? []), { unitType: draft.unitTypes[0]?.name ?? "", pct: 0 }],
                   },
                 }))
               }
@@ -1404,8 +1590,8 @@ function HomeContent() {
                   }
                 >
                   {budget.unitTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
+                    <option key={type.name} value={type.name}>
+                      {type.name}
                     </option>
                   ))}
                 </select>
@@ -1605,7 +1791,7 @@ function HomeContent() {
       {batch !== null ? (
         <BatchModal
           kind={batch}
-          unitTypes={budget.unitTypes}
+          unitTypeNames={budget.unitTypes.map((type) => type.name)}
           owners={budget.owners}
           onCancel={() => setBatch(null)}
           onApplyOwners={(owners, replaceAll) => {
@@ -1616,6 +1802,10 @@ function HomeContent() {
             applyBatchUnits(units, replaceAll);
             setBatch(null);
           }}
+          onApplyUnitTypes={(unitTypes, replaceAll) => {
+            applyBatchUnitTypes(unitTypes, replaceAll);
+            setBatch(null);
+          }}
         />
       ) : null}
     </div>
@@ -1624,33 +1814,47 @@ function HomeContent() {
 
 function BatchModal({
   kind,
-  unitTypes,
+  unitTypeNames,
   owners,
   onCancel,
   onApplyOwners,
   onApplyUnits,
+  onApplyUnitTypes,
 }: {
-  kind: "owner" | "unit";
-  unitTypes: string[];
+  kind: "owner" | "unit" | "unitType";
+  unitTypeNames: string[];
   owners: Owner[];
   onCancel: () => void;
   onApplyOwners: (owners: Owner[], replaceAll: boolean) => void;
   onApplyUnits: (units: Unit[], replaceAll: boolean) => void;
+  onApplyUnitTypes: (unitTypes: UnitType[], replaceAll: boolean) => void;
 }) {
   const [text, setText] = useState("");
   const [replaceAll, setReplaceAll] = useState(false);
+  const noun = kind === "owner" ? "owners" : kind === "unit" ? "units" : "unit types";
 
   const ownerResult = useMemo(() => (kind === "owner" ? parseOwnerLines(text) : null), [kind, text]);
-  const unitResult = useMemo(() => (kind === "unit" ? parseUnitLines(text, unitTypes, owners) : null), [kind, text, unitTypes, owners]);
+  const unitResult = useMemo(
+    () => (kind === "unit" ? parseUnitLines(text, unitTypeNames, owners) : null),
+    [kind, text, unitTypeNames, owners],
+  );
+  const unitTypeResult = useMemo(() => (kind === "unitType" ? parseUnitTypeLines(text) : null), [kind, text]);
 
-  const parsedCount = kind === "owner" ? (ownerResult?.owners.length ?? 0) : (unitResult?.units.length ?? 0);
-  const skipped = unitResult?.skipped ?? [];
+  const parsedCount =
+    kind === "owner"
+      ? (ownerResult?.owners.length ?? 0)
+      : kind === "unit"
+        ? (unitResult?.units.length ?? 0)
+        : (unitTypeResult?.unitTypes.length ?? 0);
+  const skipped = (kind === "unit" ? unitResult?.skipped : kind === "unitType" ? unitTypeResult?.skipped : []) ?? [];
 
   const apply = () => {
     if (kind === "owner" && ownerResult) {
       onApplyOwners(ownerResult.owners, replaceAll);
     } else if (kind === "unit" && unitResult) {
       onApplyUnits(unitResult.units, replaceAll);
+    } else if (kind === "unitType" && unitTypeResult) {
+      onApplyUnitTypes(unitTypeResult.unitTypes, replaceAll);
     }
   };
 
@@ -1669,14 +1873,16 @@ function BatchModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Batch add ${kind === "owner" ? "owners" : "units"}`}
+        aria-label={`Batch add ${noun}`}
         className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-[#e7d7c8] bg-[#fbf6ef] p-6 shadow-2xl"
       >
-        <h3 className="text-xl font-semibold text-[#181716]">Batch add {kind === "owner" ? "owners" : "units"}</h3>
+        <h3 className="text-xl font-semibold text-[#181716]">Batch add {noun}</h3>
         <p className="mt-1 text-sm text-[#5b5148]">
           {kind === "owner"
             ? "One owner per line: name, current monthly (comma or tab separated). The amount is optional and may have a $ prefix. Exclusion is not set here; toggle it afterwards."
-            : "One unit per line: label, type, common interest, owner (comma or tab separated). Owner is matched by name to an existing owner."}
+            : kind === "unit"
+              ? "One unit per line: label, type, common interest, owner (comma or tab separated). Owner is matched by name to an existing owner."
+              : "One unit type per line: name, classification (comma or tab separated). Classification is optional and defaults to Primary; use 'primary' or 'ancillary'."}
         </p>
         <textarea
           className="mt-3 h-44 w-full rounded-xl border border-[#e6d7c7] bg-white px-3 py-2 font-mono text-sm text-[#1d1b18] outline-none focus:border-[#c9a888] focus:ring-2 focus:ring-[#edc9a6]/60"
@@ -1684,7 +1890,9 @@ function BatchModal({
           placeholder={
             kind === "owner"
               ? "Alice, $1000\nBob, 900\nMaple Holdings LLC, $650"
-              : "1A, residential, 30, Alice\nCU1, commercial, 20, Maple Holdings LLC"
+              : kind === "unit"
+                ? "1A, residential, 30, Alice\nCU1, commercial, 20, Maple Holdings LLC"
+                : "Residential, primary\nStorage, ancillary\nGarage, ancillary"
           }
           onChange={(event) => setText(event.target.value)}
         />
@@ -1692,7 +1900,7 @@ function BatchModal({
         <div className="mt-3 text-sm text-[#4a4037]">
           <p>
             <span className="font-semibold text-[#3f7a52]">{parsedCount}</span> parsed
-            {kind === "unit" ? (
+            {kind !== "owner" ? (
               <>
                 , <span className={skipped.length > 0 ? "font-semibold text-[#b44b43]" : ""}>{skipped.length}</span> skipped
               </>
@@ -1712,7 +1920,7 @@ function BatchModal({
 
         <label className="mt-3 flex items-center gap-2 text-sm text-[#4a4037]">
           <input type="checkbox" checked={replaceAll} onChange={(event) => setReplaceAll(event.target.checked)} />
-          Replace all existing {kind === "owner" ? "owners" : "units"}
+          Replace all existing {noun}
         </label>
 
         <div className="mt-5 flex justify-end gap-3">

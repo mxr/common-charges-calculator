@@ -1,5 +1,17 @@
-import { ALLOCATION_METHODS } from "./types";
-import type { Adjustments, AllocationMethod, Budget, Expense, Owner, Policy, PolicyRule, TypeOffset, Unit } from "./types";
+import { ALLOCATION_METHODS, UNIT_CLASSIFICATIONS } from "./types";
+import type {
+  Adjustments,
+  AllocationMethod,
+  Budget,
+  Expense,
+  Owner,
+  Policy,
+  PolicyRule,
+  TypeOffset,
+  Unit,
+  UnitClassification,
+  UnitType,
+} from "./types";
 
 let idCounter = 0;
 
@@ -8,7 +20,13 @@ export const makeId = (prefix: string) => {
   return `${prefix}-${Date.now().toString(36)}-${idCounter.toString(36)}`;
 };
 
-export const DEFAULT_UNIT_TYPES = ["Residential", "Commercial", "Storage", "Garage", "Cabana"];
+export const DEFAULT_UNIT_TYPES: UnitType[] = [
+  { name: "Residential", classification: "primary" },
+  { name: "Commercial", classification: "primary" },
+  { name: "Storage", classification: "ancillary" },
+  { name: "Garage", classification: "ancillary" },
+  { name: "Cabana", classification: "ancillary" },
+];
 export const DEFAULT_CATEGORIES = ["Insurance", "Utilities", "Maintenance", "Services"];
 
 export const DEFAULT_BUDGET: Budget = {
@@ -102,6 +120,22 @@ const asStringArray = (value: unknown): string[] =>
 const normalizeMethod = (value: unknown): AllocationMethod =>
   ALLOCATION_METHODS.includes(value as AllocationMethod) ? (value as AllocationMethod) : "common_interest";
 
+const normalizeClassification = (value: unknown): UnitClassification =>
+  UNIT_CLASSIFICATIONS.includes(value as UnitClassification) ? (value as UnitClassification) : "primary";
+
+// Accepts both the current object form and the legacy bare-string form (which becomes a primary type).
+const normalizeUnitType = (value: unknown): UnitType | null => {
+  if (typeof value === "string") {
+    return value ? { name: value, classification: "primary" } : null;
+  }
+  const raw = (value ?? {}) as Record<string, unknown>;
+  const name = asString(raw.name);
+  return name ? { name, classification: normalizeClassification(raw.classification) } : null;
+};
+
+const normalizeUnitTypes = (value: unknown): UnitType[] =>
+  Array.isArray(value) ? value.map(normalizeUnitType).filter((type): type is UnitType => type !== null) : [];
+
 const normalizeRule = (value: unknown): PolicyRule => {
   const raw = (value ?? {}) as Record<string, unknown>;
   return {
@@ -174,7 +208,7 @@ export const normalizeBudget = (value: unknown): Budget => {
   return {
     owners: Array.isArray(raw.owners) ? raw.owners.map(normalizeOwner) : [],
     units: Array.isArray(raw.units) ? raw.units.map(normalizeUnit) : [],
-    unitTypes: asStringArray(raw.unitTypes),
+    unitTypes: normalizeUnitTypes(raw.unitTypes),
     categories: asStringArray(raw.categories),
     policies: Array.isArray(raw.policies) ? raw.policies.map(normalizePolicy) : [],
     expenses: Array.isArray(raw.expenses) ? raw.expenses.map(normalizeExpense) : [],
@@ -202,7 +236,7 @@ export const validateBudget = (budget: Budget): string[] => {
 
   const policyIds = new Set(budget.policies.map((policy) => policy.id));
   const ownerIds = new Set(budget.owners.map((owner) => owner.id));
-  const unitTypeSet = new Set(budget.unitTypes);
+  const unitTypeSet = new Set(budget.unitTypes.map((type) => type.name));
 
   for (const expense of budget.expenses) {
     if (!expense.policyId || !policyIds.has(expense.policyId)) {
@@ -222,8 +256,8 @@ export const validateBudget = (budget: Budget): string[] => {
 
   const usedUnitTypes = new Set(budget.units.map((unit) => unit.type));
   for (const type of budget.unitTypes) {
-    if (!usedUnitTypes.has(type)) {
-      warnings.push(`Unit type "${type}" is not used by any unit.`);
+    if (!usedUnitTypes.has(type.name)) {
+      warnings.push(`Unit type "${type.name}" is not used by any unit.`);
     }
   }
 
