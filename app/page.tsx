@@ -37,13 +37,22 @@ const EXPENSE_SORT_LABELS: Record<ExpenseSortKey, string> = {
   split: "Split",
 };
 
-type UnitSortKey = "label" | "ci" | "owner";
+type UnitSortKey = "label" | "ci";
 
 const UNIT_SORT_LABELS: Record<UnitSortKey, string> = {
   label: "Number",
   ci: "Common interest",
-  owner: "Owner",
 };
+
+type UnitFilter = "all" | "primary" | "ancillary";
+
+const UNIT_FILTER_LABELS: Record<UnitFilter, string> = {
+  all: "All",
+  primary: "Primary",
+  ancillary: "Ancillary",
+};
+
+const UNIT_FILTERS: UnitFilter[] = ["all", "primary", "ancillary"];
 
 type OwnerSortKey = "name" | "currentMonthly";
 
@@ -91,14 +100,12 @@ function compareExpenses(a: Expense, b: Expense, key: ExpenseSortKey, dir: "asc"
   return av.localeCompare(bv) * factor;
 }
 
-function compareUnits(a: Unit, b: Unit, key: UnitSortKey, dir: "asc" | "desc", ownerName: Map<string, string>): number {
+function compareUnits(a: Unit, b: Unit, key: UnitSortKey, dir: "asc" | "desc"): number {
   const factor = dir === "asc" ? 1 : -1;
   if (key === "ci") {
     return (a.commonInterest - b.commonInterest) * factor;
   }
-  const av = key === "label" ? a.label : (ownerName.get(a.ownerId) ?? "");
-  const bv = key === "label" ? b.label : (ownerName.get(b.ownerId) ?? "");
-  return av.localeCompare(bv) * factor;
+  return a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" }) * factor;
 }
 
 function compareOwners(a: Owner, b: Owner, key: OwnerSortKey, dir: "asc" | "desc"): number {
@@ -168,7 +175,7 @@ function parseSortParam(raw: string): SortParam {
       }
     } else if (parts[0] === "u" && parts.length === 3) {
       const [, key, dir] = parts;
-      if ((key === "label" || key === "ci" || key === "owner") && (dir === "asc" || dir === "desc")) {
+      if ((key === "label" || key === "ci") && (dir === "asc" || dir === "desc")) {
         result.unit = { key, dir };
       }
     } else if (parts[0] === "ut" && parts.length === 3) {
@@ -220,11 +227,15 @@ function HomeContent() {
   const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [copied, setCopied] = useState(false);
-  const [unitView, setUnitView] = useState<"type" | "owner">("type");
+  const [activeTab, setActiveTab] = useState<"setup" | "rules" | "output">("setup");
+  const [assignmentView, setAssignmentView] = useState<"type" | "owner">("type");
+  const [unitFilter, setUnitFilter] = useState<UnitFilter>("all");
+  const [unitTypeFilter, setUnitTypeFilter] = useState<Set<string>>(new Set());
   const [batch, setBatch] = useState<"owner" | "unit" | "unitType" | null>(null);
   const collapsedInit = new Set((searchParams.get("c") ?? "").split(",").filter(Boolean));
   const [collapsedOwners, setCollapsedOwners] = useState(collapsedInit.has("owners"));
   const [collapsedUnits, setCollapsedUnits] = useState(collapsedInit.has("units"));
+  const [collapsedAssignments, setCollapsedAssignments] = useState(collapsedInit.has("assignments"));
   const [collapsedPolicies, setCollapsedPolicies] = useState(collapsedInit.has("policies"));
   const [collapsedExpenses, setCollapsedExpenses] = useState(collapsedInit.has("expenses"));
   const [collapsedUnitTypes, setCollapsedUnitTypes] = useState(collapsedInit.has("unitTypes"));
@@ -239,6 +250,7 @@ function HomeContent() {
   const collapsedParam = [
     collapsedOwners && "owners",
     collapsedUnits && "units",
+    collapsedAssignments && "assignments",
     collapsedUnitTypes && "unitTypes",
     collapsedPolicies && "policies",
     collapsedExpenses && "expenses",
@@ -410,13 +422,12 @@ function HomeContent() {
     if (!sortInit.unit) {
       return [];
     }
-    const ownerName = new Map(budget.owners.map((owner) => [owner.id, owner.name]));
     const { key, dir } = sortInit.unit;
     return deriveOrder(
       budget.units,
       [],
       (unit) => unit.id,
-      (a, b) => compareUnits(a, b, key, dir, ownerName),
+      (a, b) => compareUnits(a, b, key, dir),
     );
   });
   const cycleUnitSort = (key: UnitSortKey) => {
@@ -426,13 +437,12 @@ function HomeContent() {
       setUnitSort(null);
       return;
     }
-    const ownerName = new Map(budget.owners.map((owner) => [owner.id, owner.name]));
     setUnitOrder(
       deriveOrder(
         budget.units,
         unitOrder,
         (unit) => unit.id,
-        (a, b) => compareUnits(a, b, key, dir, ownerName),
+        (a, b) => compareUnits(a, b, key, dir),
       ),
     );
     setUnitSort({ key, dir });
@@ -601,7 +611,7 @@ function HomeContent() {
 
   const renderUnitRow = (unit: Unit) => {
     return (
-      <div key={unit.id} className="grid gap-2 transition-opacity sm:grid-cols-[1.2fr_1fr_0.9fr_1.4fr_auto] sm:items-center">
+      <div key={unit.id} className="grid gap-2 transition-opacity sm:grid-cols-[1.4fr_1.2fr_1fr_auto] sm:items-center">
         <TextField
           className={field}
           value={unit.label}
@@ -632,19 +642,6 @@ function HomeContent() {
             }))
           }
         />
-        <select
-          className={field}
-          value={unit.ownerId}
-          onChange={(event) =>
-            patch((draft) => ({ ...draft, units: draft.units.map((u) => (u.id === unit.id ? { ...u, ownerId: event.target.value } : u)) }))
-          }
-        >
-          {budget.owners.map((owner) => (
-            <option key={owner.id} value={owner.id}>
-              {owner.name}
-            </option>
-          ))}
-        </select>
         <button
           type="button"
           className={removeButton}
@@ -656,23 +653,99 @@ function HomeContent() {
     );
   };
 
-  // Order units within a type group by the saved display order. Only used in the "by type" view;
-  // "by owner" stays in entry order.
+  const renderAssignmentRow = (unit: Unit) => {
+    return (
+      <div key={unit.id} className="flex items-center gap-3">
+        <span className="w-20 shrink-0 text-sm font-medium text-[#1d1b18]">{unit.label || "—"}</span>
+        <select
+          className={`${field} max-w-xs flex-1`}
+          value={unit.ownerId}
+          onChange={(event) =>
+            patch((draft) => ({ ...draft, units: draft.units.map((u) => (u.id === unit.id ? { ...u, ownerId: event.target.value } : u)) }))
+          }
+        >
+          <option value="">— unassigned —</option>
+          {budget.owners.map((owner) => (
+            <option key={owner.id} value={owner.id}>
+              {owner.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  };
+
+  // Order units within a type group by the saved display order.
   const sortUnits = (units: Unit[]): Unit[] => applyOrder(units, unitOrder, (unit) => unit.id);
 
-  const unitGroups: { key: string; label: string; classification?: UnitClassification; units: Unit[] }[] =
-    unitView === "type"
-      ? budget.unitTypes.map((type) => ({
-          key: type.name,
-          label: type.name,
-          classification: type.classification,
-          units: sortUnits(budget.units.filter((unit) => unit.type === type.name)),
-        }))
-      : budget.owners.map((owner) => ({
-          key: owner.id,
-          label: owner.name,
-          units: budget.units.filter((unit) => unit.ownerId === owner.id),
-        }));
+  const unitGroups: { key: string; label: string; classification: UnitClassification; units: Unit[] }[] = budget.unitTypes
+    .filter((type) => unitFilter === "all" || type.classification === unitFilter)
+    .filter((type) => unitTypeFilter.size === 0 || unitTypeFilter.has(type.name))
+    .map((type) => ({
+      key: type.name,
+      label: type.name,
+      classification: type.classification,
+      units: sortUnits(budget.units.filter((unit) => unit.type === type.name)),
+    }));
+
+  const classByType = new Map(budget.unitTypes.map((type) => [type.name, type.classification]));
+  const passesUnitFilter = (unit: Unit): boolean => {
+    if (unitTypeFilter.size > 0 && !unitTypeFilter.has(unit.type)) {
+      return false;
+    }
+    if (unitFilter !== "all" && classByType.get(unit.type) !== unitFilter) {
+      return false;
+    }
+    return true;
+  };
+  const passesTypeFilter = (type: UnitType): boolean => {
+    if (unitFilter !== "all" && type.classification !== unitFilter) {
+      return false;
+    }
+    if (unitTypeFilter.size > 0 && !unitTypeFilter.has(type.name)) {
+      return false;
+    }
+    return true;
+  };
+
+  const assignmentByTypeGroups: { key: string; label: string; classification: UnitClassification; units: Unit[] }[] = budget.unitTypes
+    .filter(passesTypeFilter)
+    .map((type) => ({
+      key: `a:t:${type.name}`,
+      label: type.name,
+      classification: type.classification,
+      units: sortUnits(budget.units.filter((unit) => unit.type === type.name)),
+    }));
+
+  const assignmentByOwnerGroups: { key: string; owner: Owner; units: Unit[]; primaryUnits: Unit[]; totalCi: number }[] = budget.owners.map(
+    (owner) => {
+      const ownerUnits = budget.units.filter((unit) => unit.ownerId === owner.id);
+      const visible = sortUnits(ownerUnits.filter(passesUnitFilter));
+      const primaryUnits = ownerUnits.filter((unit) => classByType.get(unit.type) === "primary");
+      const totalCi = visible.reduce((sum, unit) => sum + unit.commonInterest, 0);
+      return { key: `a:o:${owner.id}`, owner, units: visible, primaryUnits, totalCi };
+    },
+  );
+
+  const unassignedUnits = sortUnits(budget.units.filter((unit) => !unit.ownerId && passesUnitFilter(unit)));
+
+  const assignmentGroupKeys =
+    assignmentView === "type" ? assignmentByTypeGroups.map((group) => group.key) : assignmentByOwnerGroups.map((group) => group.key);
+  const allAssignmentsCollapsed = assignmentGroupKeys.length > 0 && assignmentGroupKeys.every((key) => collapsedTypes.has(key));
+  const toggleAllAssignments = () =>
+    setCollapsedTypes((prev) => {
+      const next = new Set(prev);
+      if (allAssignmentsCollapsed) {
+        for (const key of assignmentGroupKeys) {
+          next.delete(key);
+        }
+      } else {
+        for (const key of assignmentGroupKeys) {
+          next.add(key);
+        }
+      }
+      return next;
+    });
 
   const expenseCategories = [...new Set([...budget.categories, ...budget.expenses.map((expense) => expense.category)])];
 
@@ -725,548 +798,814 @@ function HomeContent() {
           </section>
         ) : null}
 
-        {/* Owners */}
-        <section className={card}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <nav className="flex flex-wrap gap-2">
+          {(
+            [
+              ["setup", "Owners & units"],
+              ["rules", "Rules & expenses"],
+              ["output", "Charges"],
+            ] as const
+          ).map(([key, label]) => (
             <button
+              key={key}
               type="button"
-              className={`${sectionTitle} flex items-center gap-2`}
-              onClick={() => setCollapsedOwners((value) => !value)}
+              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                activeTab === key
+                  ? "border-[#1b1a17] bg-[#1b1a17] text-white"
+                  : "border-[#d8c7b5] text-[#5b5148] hover:-translate-y-0.5 hover:bg-[#f1e7db]"
+              }`}
+              onClick={() => setActiveTab(key)}
             >
-              <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedOwners ? "▸" : "▾"}</span>
-              Owners
-              <span className="text-sm font-normal text-[#9a8a7b]">({budget.owners.length})</span>
+              {label}
             </button>
-            <div className="flex flex-wrap items-center gap-2">
-              {budget.owners.length > 1 ? (
-                <div className="flex items-center gap-2">
-                  <span className={groupHeading}>Sort by</span>
-                  <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
-                    {(["name", "currentMonthly"] as OwnerSortKey[]).map((key) => {
-                      const active = ownerSort?.key === key;
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
-                          aria-label={`Sort owners by ${OWNER_SORT_LABELS[key].toLowerCase()}${active ? ` (${ownerSort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
-                          onClick={() => cycleOwnerSort(key)}
-                        >
-                          {OWNER_SORT_LABELS[key]}
-                          {active ? (ownerSort.dir === "asc" ? " ↑" : " ↓") : ""}
-                        </button>
-                      );
-                    })}
-                  </div>
+          ))}
+        </nav>
+
+        {activeTab === "setup" ? (
+          <>
+            {/* Owners */}
+            <section className={card}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  className={`${sectionTitle} flex items-center gap-2`}
+                  onClick={() => setCollapsedOwners((value) => !value)}
+                >
+                  <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedOwners ? "▸" : "▾"}</span>
+                  Owners
+                  <span className="text-sm font-normal text-[#9a8a7b]">({budget.owners.length})</span>
+                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {budget.owners.length > 1 ? (
+                    <div className="flex items-center gap-2">
+                      <span className={groupHeading}>Sort by</span>
+                      <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                        {(["name", "currentMonthly"] as OwnerSortKey[]).map((key) => {
+                          const active = ownerSort?.key === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                              aria-label={`Sort owners by ${OWNER_SORT_LABELS[key].toLowerCase()}${active ? ` (${ownerSort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
+                              onClick={() => cycleOwnerSort(key)}
+                            >
+                              {OWNER_SORT_LABELS[key]}
+                              {active ? (ownerSort.dir === "asc" ? " ↑" : " ↓") : ""}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                  <button type="button" className={pillButton} onClick={() => addOwnerAndFocus("New owner")}>
+                    Add owner
+                  </button>
+                  <button type="button" className={pillButton} onClick={() => setBatch("owner")}>
+                    Batch add
+                  </button>
+                  <button type="button" className={dangerButton} onClick={() => patch((draft) => ({ ...draft, owners: [] }))}>
+                    Delete all
+                  </button>
                 </div>
-              ) : null}
-              <button type="button" className={pillButton} onClick={() => addOwnerAndFocus("New owner")}>
-                Add owner
-              </button>
-              <button type="button" className={pillButton} onClick={() => setBatch("owner")}>
-                Batch add
-              </button>
-              <button type="button" className={dangerButton} onClick={() => patch((draft) => ({ ...draft, owners: [] }))}>
-                Delete all
-              </button>
-            </div>
-          </div>
-          {collapsedOwners ? null : (
-            <>
-              <p className={`${sectionHint} mt-1`}>
-                Add all owners here with 'Add owner', batch upload, or the Tab key. Mark an owner as 'excluded' and their Units don't pay
-                common charges (example: if the condo board owns units).
-              </p>
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-[#eadccb] text-left text-xs font-semibold uppercase tracking-[0.2em] text-[#8c7b6c]">
-                      <th className="py-2 pr-4">Owner name</th>
-                      <th className="py-2 pr-4">Current $/mo</th>
-                      <th className="py-2 pl-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {applyOrder(budget.owners, ownerOrder, (owner) => owner.id).map((owner, index) => {
-                      return (
-                        <tr key={owner.id} className="border-b border-[#f2e8dd]">
-                          <td className="py-2 pr-4 align-middle">
-                            <TextField
-                              id={`owner-name-${owner.id}`}
-                              className={field}
-                              value={owner.name}
-                              onChange={(next) =>
-                                patch((draft) => ({
-                                  ...draft,
-                                  owners: draft.owners.map((o) => (o.id === owner.id ? { ...o, name: next } : o)),
-                                }))
-                              }
-                              onKeyDown={(event) => handleOwnerTab(event, index === budget.owners.length - 1)}
-                            />
-                          </td>
-                          <td className="py-2 pr-4 align-middle">
-                            <CurrencyField
-                              className={`${fieldBase} w-28`}
-                              value={owner.currentMonthly}
-                              onChange={(next) =>
-                                patch((draft) => ({
-                                  ...draft,
-                                  owners: draft.owners.map((o) => (o.id === owner.id ? { ...o, currentMonthly: next } : o)),
-                                }))
-                              }
-                            />
-                          </td>
-                          <td className="py-2 pl-4 align-middle">
-                            <div className="flex items-center justify-end gap-2">
-                              <label className="flex items-center gap-1 whitespace-nowrap text-xs text-[#4a4037]">
-                                <input
-                                  type="checkbox"
-                                  checked={owner.excluded}
-                                  onChange={(event) =>
+              </div>
+              {collapsedOwners ? null : (
+                <>
+                  <p className={`${sectionHint} mt-1`}>
+                    Add all owners here with 'Add owner', batch upload, or the Tab key. Mark an owner as 'excluded' and their Units don't
+                    pay common charges (example: if the condo board owns units).
+                  </p>
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="w-full border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b border-[#eadccb] text-left text-xs font-semibold uppercase tracking-[0.2em] text-[#8c7b6c]">
+                          <th className="py-2 pr-4">Owner name</th>
+                          <th className="py-2 pr-4">Current $/mo</th>
+                          <th className="py-2 pl-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {applyOrder(budget.owners, ownerOrder, (owner) => owner.id).map((owner, index) => {
+                          return (
+                            <tr key={owner.id} className="border-b border-[#f2e8dd]">
+                              <td className="py-2 pr-4 align-middle">
+                                <TextField
+                                  id={`owner-name-${owner.id}`}
+                                  className={field}
+                                  value={owner.name}
+                                  onChange={(next) =>
                                     patch((draft) => ({
                                       ...draft,
-                                      owners: draft.owners.map((o) => (o.id === owner.id ? { ...o, excluded: event.target.checked } : o)),
+                                      owners: draft.owners.map((o) => (o.id === owner.id ? { ...o, name: next } : o)),
+                                    }))
+                                  }
+                                  onKeyDown={(event) => handleOwnerTab(event, index === budget.owners.length - 1)}
+                                />
+                              </td>
+                              <td className="py-2 pr-4 align-middle">
+                                <CurrencyField
+                                  className={`${fieldBase} w-28`}
+                                  value={owner.currentMonthly}
+                                  onChange={(next) =>
+                                    patch((draft) => ({
+                                      ...draft,
+                                      owners: draft.owners.map((o) => (o.id === owner.id ? { ...o, currentMonthly: next } : o)),
                                     }))
                                   }
                                 />
-                                Excluded
-                              </label>
+                              </td>
+                              <td className="py-2 pl-4 align-middle">
+                                <div className="flex items-center justify-end gap-2">
+                                  <label className="flex items-center gap-1 whitespace-nowrap text-xs text-[#4a4037]">
+                                    <input
+                                      type="checkbox"
+                                      checked={owner.excluded}
+                                      onChange={(event) =>
+                                        patch((draft) => ({
+                                          ...draft,
+                                          owners: draft.owners.map((o) =>
+                                            o.id === owner.id ? { ...o, excluded: event.target.checked } : o,
+                                          ),
+                                        }))
+                                      }
+                                    />
+                                    Excluded
+                                  </label>
+                                  <button
+                                    type="button"
+                                    className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                    aria-label="Remove owner"
+                                    onClick={() => patch((draft) => ({ ...draft, owners: draft.owners.filter((o) => o.id !== owner.id) }))}
+                                  >
+                                    <TrashIcon />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between border-t border-[#eadccb] pt-3 text-sm font-semibold text-[#181716]">
+                    <span>Total income</span>
+                    <span>{formatCurrency(budget.owners.reduce((sum, owner) => sum + owner.currentMonthly * 12, 0))}/yr</span>
+                  </div>
+                </>
+              )}
+            </section>
+
+            {/* Unit types */}
+            <section className={card}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  className={`${sectionTitle} flex items-center gap-2`}
+                  onClick={() => setCollapsedUnitTypes((value) => !value)}
+                >
+                  <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedUnitTypes ? "▸" : "▾"}</span>
+                  Unit types
+                  <span className="text-sm font-normal text-[#9a8a7b]">({budget.unitTypes.length})</span>
+                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {budget.unitTypes.length > 1 ? (
+                    <div className="flex items-center gap-2">
+                      <span className={groupHeading}>Sort by</span>
+                      <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                        {(["name", "classification"] as UnitTypeSortKey[]).map((key) => {
+                          const active = unitTypeSort?.key === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                              aria-label={`Sort unit types by ${UNIT_TYPE_SORT_LABELS[key].toLowerCase()}${active ? ` (${unitTypeSort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
+                              onClick={() => cycleUnitTypeSort(key)}
+                            >
+                              {UNIT_TYPE_SORT_LABELS[key]}
+                              {active ? (unitTypeSort.dir === "asc" ? " ↑" : " ↓") : ""}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                  <button type="button" className={pillButton} onClick={() => addUnitTypeAndFocus("New type")}>
+                    Add unit type
+                  </button>
+                  <button type="button" className={pillButton} onClick={() => setBatch("unitType")}>
+                    Batch add
+                  </button>
+                  <button type="button" className={dangerButton} onClick={() => patch((draft) => ({ ...draft, unitTypes: [] }))}>
+                    Delete all
+                  </button>
+                </div>
+              </div>
+              {collapsedUnitTypes ? null : (
+                <>
+                  <p className={`${sectionHint} mt-1`}>
+                    Unit types are referenced by units, policies, and offsets. Classification (Primary or Ancillary) is for bookkeeping only
+                    and does not affect charges yet.
+                  </p>
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="w-full border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b border-[#eadccb] text-left text-xs font-semibold uppercase tracking-[0.2em] text-[#8c7b6c]">
+                          <th className="py-2 pr-4">Type name</th>
+                          <th className="py-2 pr-4">Classification</th>
+                          <th className="py-2 pl-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {applyOrder(budget.unitTypes, unitTypeOrder, (type) => type.name).map((type, index) => (
+                          <tr key={type.name} className="border-b border-[#f2e8dd]">
+                            <td className="py-2 pr-4 align-middle">
+                              <TextField
+                                id={`unittype-name-${index}`}
+                                className={field}
+                                value={type.name}
+                                onChange={(next) => renameUnitType(type.name, next)}
+                                onKeyDown={(event) => handleUnitTypeTab(event, index === budget.unitTypes.length - 1)}
+                              />
+                            </td>
+                            <td className="py-2 pr-4 align-middle">
+                              <select
+                                className={`${fieldBase} w-40`}
+                                value={type.classification}
+                                onChange={(event) =>
+                                  patch((draft) => ({
+                                    ...draft,
+                                    unitTypes: draft.unitTypes.map((t) =>
+                                      t.name === type.name ? { ...t, classification: event.target.value as UnitClassification } : t,
+                                    ),
+                                  }))
+                                }
+                              >
+                                {UNIT_CLASSIFICATIONS.map((classification) => (
+                                  <option key={classification} value={classification}>
+                                    {UNIT_CLASSIFICATION_LABELS[classification]}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="py-2 pl-4 align-middle">
+                              <div className="flex items-center justify-end">
+                                <button
+                                  type="button"
+                                  className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                  aria-label="Remove unit type"
+                                  onClick={() =>
+                                    patch((draft) => ({ ...draft, unitTypes: draft.unitTypes.filter((t) => t.name !== type.name) }))
+                                  }
+                                >
+                                  <TrashIcon />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {budget.unitTypes.length === 0 ? <p className="mt-3 text-sm italic text-[#9a8a7b]">No unit types.</p> : null}
+                  </div>
+                </>
+              )}
+            </section>
+
+            {/* Units */}
+            <section className={card}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  className={`${sectionTitle} flex items-center gap-2`}
+                  onClick={() => setCollapsedUnits((value) => !value)}
+                >
+                  <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedUnits ? "▸" : "▾"}</span>
+                  Units
+                  <span className="text-sm font-normal text-[#9a8a7b]">({budget.units.length})</span>
+                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className={pillButton}
+                    onClick={() =>
+                      patch((draft) => ({
+                        ...draft,
+                        units: [
+                          ...draft.units,
+                          {
+                            id: makeId("unit"),
+                            label: "New unit",
+                            type: draft.unitTypes[0]?.name ?? "",
+                            commonInterest: 0,
+                            ownerId: draft.owners[0]?.id ?? "",
+                          },
+                        ],
+                      }))
+                    }
+                  >
+                    Add unit
+                  </button>
+                  <button type="button" className={pillButton} onClick={() => setBatch("unit")}>
+                    Batch add
+                  </button>
+                  <button type="button" className={dangerButton} onClick={() => patch((draft) => ({ ...draft, units: [] }))}>
+                    Delete all
+                  </button>
+                </div>
+              </div>
+              {collapsedUnits ? null : (
+                <>
+                  <p className={`${sectionHint} mt-1`}>
+                    Common interests total{" "}
+                    <span className={Math.abs(ciSum - 100) <= 0.01 ? "font-semibold text-[#3f7a52]" : "font-semibold text-[#b44b43]"}>
+                      {formatCi(ciSum)}%
+                    </span>{" "}
+                    (should be as close to 100% as possible). Columns: label, type, common interest %. Grouped by unit type. Edit owner
+                    assignments in the Assignments section below.
+                    {Math.abs(ciSum - 100) > 0.01 ? (
+                      <span className="font-semibold text-[#b44b43]"> Off from 100% - double-check the Unit definitions.</span>
+                    ) : null}
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className={groupHeading}>Filter</span>
+                      <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                        {UNIT_FILTERS.map((value) => (
+                          <button
+                            key={value}
+                            type="button"
+                            className={`px-3 py-1.5 ${unitFilter === value ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                            onClick={() => setUnitFilter(value)}
+                          >
+                            {UNIT_FILTER_LABELS[value]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {budget.unitTypes.length > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <span className={groupHeading}>Types</span>
+                        <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                          <button
+                            type="button"
+                            className={`px-3 py-1.5 ${unitTypeFilter.size === 0 ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                            onClick={() => setUnitTypeFilter(new Set())}
+                          >
+                            All
+                          </button>
+                          {budget.unitTypes.map((type) => {
+                            const active = unitTypeFilter.has(type.name);
+                            return (
+                              <button
+                                key={type.name}
+                                type="button"
+                                aria-pressed={active}
+                                className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                                onClick={() =>
+                                  setUnitTypeFilter((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(type.name)) {
+                                      next.delete(type.name);
+                                    } else {
+                                      next.add(type.name);
+                                    }
+                                    return next;
+                                  })
+                                }
+                              >
+                                {type.name || "—"}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="flex items-center gap-2">
+                      <span className={groupHeading}>Sort by</span>
+                      <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                        {(["label", "ci"] as UnitSortKey[]).map((key) => {
+                          const active = unitSort?.key === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                              aria-label={`Sort units by ${UNIT_SORT_LABELS[key].toLowerCase()}${active ? ` (${unitSort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
+                              onClick={() => cycleUnitSort(key)}
+                            >
+                              {UNIT_SORT_LABELS[key]}
+                              {active ? (unitSort.dir === "asc" ? " ↑" : " ↓") : ""}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-col gap-5">
+                    {unitGroups.map((group) => {
+                      const groupCi = group.units.reduce((sum, unit) => sum + unit.commonInterest, 0);
+                      const collapsed = collapsedTypes.has(group.key);
+                      return (
+                        <div key={group.key} className="flex flex-col gap-2">
+                          <div className="flex items-center justify-between">
+                            <button type="button" className="flex items-center gap-2" onClick={() => toggleType(group.key)}>
+                              <span className="text-lg leading-none text-[#8c7b6c]">{collapsed ? "▸" : "▾"}</span>
+                              <span className={groupHeading}>{group.label || "—"}</span>
+                            </button>
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-full border border-[#e6d7c7] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#8c7b6c]">
+                                {UNIT_CLASSIFICATION_LABELS[group.classification]}
+                              </span>
+                              <span className="text-xs text-[#9a8a7b]">{formatCi(groupCi)}%</span>
+                            </div>
+                          </div>
+                          {collapsed ? null : group.units.length === 0 ? (
+                            <p className="text-sm italic text-[#9a8a7b]">No units.</p>
+                          ) : (
+                            <div className="space-y-2 lg:columns-2 lg:gap-x-6 lg:space-y-0">
+                              {group.units.map((unit) => (
+                                <div key={unit.id} className="mb-2 break-inside-avoid">
+                                  {renderUnitRow(unit)}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </section>
+
+            {/* Assignments */}
+            <section className={card}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  className={`${sectionTitle} flex items-center gap-2`}
+                  onClick={() => setCollapsedAssignments((value) => !value)}
+                >
+                  <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedAssignments ? "▸" : "▾"}</span>
+                  Assignments
+                  <span className="text-sm font-normal text-[#9a8a7b]">({budget.units.length})</span>
+                </button>
+                {!collapsedAssignments && assignmentGroupKeys.length > 0 ? (
+                  <button type="button" className={pillButton} onClick={toggleAllAssignments}>
+                    {allAssignmentsCollapsed ? "Expand all" : "Collapse all"}
+                  </button>
+                ) : null}
+              </div>
+              {collapsedAssignments ? null : (
+                <>
+                  <p className={`${sectionHint} mt-1`}>Assign an owner to each unit. Change a unit's type in the Units section above.</p>
+                  <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className={groupHeading}>Grouping</span>
+                      <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                        <button
+                          type="button"
+                          className={`px-3 py-1.5 ${assignmentView === "type" ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                          onClick={() => setAssignmentView("type")}
+                        >
+                          By type
+                        </button>
+                        <button
+                          type="button"
+                          className={`px-3 py-1.5 ${assignmentView === "owner" ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                          onClick={() => setAssignmentView("owner")}
+                        >
+                          By owner
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={groupHeading}>Filter</span>
+                      <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                        {UNIT_FILTERS.map((value) => (
+                          <button
+                            key={value}
+                            type="button"
+                            className={`px-3 py-1.5 ${unitFilter === value ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                            onClick={() => setUnitFilter(value)}
+                          >
+                            {UNIT_FILTER_LABELS[value]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {budget.unitTypes.length > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <span className={groupHeading}>Types</span>
+                        <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                          <button
+                            type="button"
+                            className={`px-3 py-1.5 ${unitTypeFilter.size === 0 ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                            onClick={() => setUnitTypeFilter(new Set())}
+                          >
+                            All
+                          </button>
+                          {budget.unitTypes.map((type) => {
+                            const active = unitTypeFilter.has(type.name);
+                            return (
+                              <button
+                                key={type.name}
+                                type="button"
+                                aria-pressed={active}
+                                className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                                onClick={() =>
+                                  setUnitTypeFilter((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(type.name)) {
+                                      next.delete(type.name);
+                                    } else {
+                                      next.add(type.name);
+                                    }
+                                    return next;
+                                  })
+                                }
+                              >
+                                {type.name || "—"}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="flex items-center gap-2">
+                      <span className={groupHeading}>Sort by</span>
+                      <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                        {(["label", "ci"] as UnitSortKey[]).map((key) => {
+                          const active = unitSort?.key === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                              aria-label={`Sort units by ${UNIT_SORT_LABELS[key].toLowerCase()}${active ? ` (${unitSort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
+                              onClick={() => cycleUnitSort(key)}
+                            >
+                              {UNIT_SORT_LABELS[key]}
+                              {active ? (unitSort.dir === "asc" ? " ↑" : " ↓") : ""}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                  {assignmentView === "type" ? (
+                    <div className="mt-4 flex flex-col gap-5">
+                      {assignmentByTypeGroups.map((group) => {
+                        const collapsed = collapsedTypes.has(group.key);
+                        return (
+                          <div key={group.key} className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                              <button type="button" className="flex items-center gap-2" onClick={() => toggleType(group.key)}>
+                                <span className="text-lg leading-none text-[#8c7b6c]">{collapsed ? "▸" : "▾"}</span>
+                                <span className={groupHeading}>{group.label || "—"}</span>
+                              </button>
+                              <div className="flex items-center gap-2">
+                                <span className="rounded-full border border-[#e6d7c7] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#8c7b6c]">
+                                  {UNIT_CLASSIFICATION_LABELS[group.classification]}
+                                </span>
+                                <span className="text-xs text-[#9a8a7b]">{group.units.length}</span>
+                              </div>
+                            </div>
+                            {collapsed ? null : group.units.length === 0 ? (
+                              <p className="text-sm italic text-[#9a8a7b]">No units.</p>
+                            ) : (
+                              <div className="space-y-2 lg:columns-2 lg:gap-x-6 lg:space-y-0">
+                                {group.units.map((unit) => (
+                                  <div key={unit.id} className="mb-2 break-inside-avoid">
+                                    {renderAssignmentRow(unit)}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="mt-4 flex flex-col gap-5">
+                      {assignmentByOwnerGroups.map((group) => {
+                        const collapsed = collapsedTypes.has(group.key);
+                        const primaryLabels = group.primaryUnits.map((unit) => unit.label || "—").join(", ");
+                        return (
+                          <div key={group.key} className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                              <button type="button" className="flex items-center gap-2" onClick={() => toggleType(group.key)}>
+                                <span className="text-lg leading-none text-[#8c7b6c]">{collapsed ? "▸" : "▾"}</span>
+                                {group.primaryUnits.length > 0 ? (
+                                  <span
+                                    className="rounded-full border border-[#e6d7c7] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#8c7b6c]"
+                                    title="Primary units"
+                                  >
+                                    {primaryLabels}
+                                  </span>
+                                ) : null}
+                                <span className={groupHeading}>{group.owner.name || "—"}</span>
+                              </button>
+                              <span className="text-xs text-[#9a8a7b]">{formatCi(group.totalCi)}%</span>
+                            </div>
+                            {collapsed ? null : (
+                              <div className="flex flex-col gap-1.5">
+                                {group.units.length === 0 ? (
+                                  <p className="text-sm italic text-[#9a8a7b]">No units.</p>
+                                ) : (
+                                  group.units.map((unit) => (
+                                    <div key={unit.id} className="flex items-center gap-3">
+                                      <span className="w-20 shrink-0 text-sm font-medium text-[#1d1b18]">{unit.label || "—"}</span>
+                                      <span className="w-24 shrink-0 text-sm text-[#5b5148]">{formatCi(unit.commonInterest)}%</span>
+                                      <button
+                                        type="button"
+                                        aria-label={`Remove unit ${unit.label} from owner`}
+                                        className="flex h-6 w-6 items-center justify-center rounded-full border border-[#f0c8c6] text-[#c0443c] transition hover:border-[#e9a8a4]"
+                                        onClick={() =>
+                                          patch((draft) => ({
+                                            ...draft,
+                                            units: draft.units.map((u) => (u.id === unit.id ? { ...u, ownerId: "" } : u)),
+                                          }))
+                                        }
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                  ))
+                                )}
+                                {unassignedUnits.length > 0 ? (
+                                  <div className="mt-1 flex items-center gap-2">
+                                    <span className="text-xs text-[#9a8a7b]">Add unit:</span>
+                                    <select
+                                      className={`${field} max-w-xs`}
+                                      value=""
+                                      onChange={(event) => {
+                                        const id = event.target.value;
+                                        if (!id) {
+                                          return;
+                                        }
+                                        patch((draft) => ({
+                                          ...draft,
+                                          units: draft.units.map((u) => (u.id === id ? { ...u, ownerId: group.owner.id } : u)),
+                                        }));
+                                      }}
+                                    >
+                                      <option value="">— select —</option>
+                                      {unassignedUnits.map((unit) => (
+                                        <option key={unit.id} value={unit.id}>
+                                          {unit.label || "—"} ({unit.type})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                ) : null}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </section>
+          </>
+        ) : null}
+
+        {activeTab === "rules" ? (
+          <>
+            {/* Policies */}
+            <section className={card}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  className={`${sectionTitle} flex items-center gap-2`}
+                  onClick={() => setCollapsedPolicies((value) => !value)}
+                >
+                  <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedPolicies ? "▸" : "▾"}</span>
+                  Policies
+                  <span className="text-sm font-normal text-[#9a8a7b]">({budget.policies.length})</span>
+                </button>
+                <button
+                  type="button"
+                  className={pillButton}
+                  onClick={() =>
+                    patch((draft) => ({
+                      ...draft,
+                      policies: [
+                        ...draft.policies,
+                        { id: makeId("policy"), name: "New policy", rules: [{ unitTypes: [], weight: 100, method: "common_interest" }] },
+                      ],
+                    }))
+                  }
+                >
+                  Add policy
+                </button>
+              </div>
+              {collapsedPolicies ? null : (
+                <>
+                  <p className={`${sectionHint} mt-1`}>
+                    Each rule takes an allocation % of the expense and splits it among the selected unit types.
+                  </p>
+                  <div className="mt-4 flex flex-col gap-4">
+                    {budget.policies.map((policy) => {
+                      const weightSum = policy.rules.reduce((sum, rule) => sum + rule.weight, 0);
+                      return (
+                        // biome-ignore lint/a11y/noStaticElementInteractions: native drag-and-drop reorder target
+                        <div
+                          key={policy.id}
+                          data-policy={policy.id}
+                          className={`rounded-2xl border border-[#f2e8dd] bg-[#fffaf3] p-4 transition-opacity ${dragPolicy === policy.id ? "opacity-40" : ""}`}
+                          onDragOver={(event) => {
+                            if (dragPolicy) {
+                              event.preventDefault();
+                              if (dragPolicy !== policy.id) {
+                                movePolicy(dragPolicy, policy.id, isAfterMidpoint(event));
+                              }
+                            }
+                          }}
+                          onDrop={() => setDragPolicy(null)}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              {/* biome-ignore lint/a11y/noStaticElementInteractions: drag handle */}
+                              <span
+                                draggable
+                                onDragStart={(event) => {
+                                  setDragPolicy(policy.id);
+                                  const card = (event.currentTarget as HTMLElement).closest("[data-policy]");
+                                  if (card) {
+                                    event.dataTransfer.setDragImage(card, 20, 16);
+                                  }
+                                }}
+                                onDragEnd={() => setDragPolicy(null)}
+                                className="cursor-grab select-none text-[#b3a392]"
+                                title="Drag to reorder policy"
+                              >
+                                ☰
+                              </span>
+                              <TextField
+                                className={`${field} max-w-sm`}
+                                value={policy.name}
+                                onChange={(next) =>
+                                  patch((draft) => ({
+                                    ...draft,
+                                    policies: draft.policies.map((p) => (p.id === policy.id ? { ...p, name: next } : p)),
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span
+                                className={
+                                  Math.abs(weightSum - 100) <= 0.01 ? "text-xs text-[#3f7a52]" : "text-xs font-semibold text-[#b44b43]"
+                                }
+                              >
+                                total: {weightSum}%
+                              </span>
                               <button
                                 type="button"
                                 className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                                aria-label="Remove owner"
-                                onClick={() => patch((draft) => ({ ...draft, owners: draft.owners.filter((o) => o.id !== owner.id) }))}
+                                aria-label="Remove policy"
+                                onClick={() => patch((draft) => ({ ...draft, policies: draft.policies.filter((p) => p.id !== policy.id) }))}
                               >
                                 <TrashIcon />
                               </button>
                             </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <div className="mt-3 flex items-center justify-between border-t border-[#eadccb] pt-3 text-sm font-semibold text-[#181716]">
-                <span>Total income</span>
-                <span>{formatCurrency(budget.owners.reduce((sum, owner) => sum + owner.currentMonthly * 12, 0))}/yr</span>
-              </div>
-            </>
-          )}
-        </section>
-
-        {/* Unit types */}
-        <section className={card}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              className={`${sectionTitle} flex items-center gap-2`}
-              onClick={() => setCollapsedUnitTypes((value) => !value)}
-            >
-              <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedUnitTypes ? "▸" : "▾"}</span>
-              Unit types
-              <span className="text-sm font-normal text-[#9a8a7b]">({budget.unitTypes.length})</span>
-            </button>
-            <div className="flex flex-wrap items-center gap-2">
-              {budget.unitTypes.length > 1 ? (
-                <div className="flex items-center gap-2">
-                  <span className={groupHeading}>Sort by</span>
-                  <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
-                    {(["name", "classification"] as UnitTypeSortKey[]).map((key) => {
-                      const active = unitTypeSort?.key === key;
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
-                          aria-label={`Sort unit types by ${UNIT_TYPE_SORT_LABELS[key].toLowerCase()}${active ? ` (${unitTypeSort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
-                          onClick={() => cycleUnitTypeSort(key)}
-                        >
-                          {UNIT_TYPE_SORT_LABELS[key]}
-                          {active ? (unitTypeSort.dir === "asc" ? " ↑" : " ↓") : ""}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-              <button type="button" className={pillButton} onClick={() => addUnitTypeAndFocus("New type")}>
-                Add unit type
-              </button>
-              <button type="button" className={pillButton} onClick={() => setBatch("unitType")}>
-                Batch add
-              </button>
-              <button type="button" className={dangerButton} onClick={() => patch((draft) => ({ ...draft, unitTypes: [] }))}>
-                Delete all
-              </button>
-            </div>
-          </div>
-          {collapsedUnitTypes ? null : (
-            <>
-              <p className={`${sectionHint} mt-1`}>
-                Unit types are referenced by units, policies, and offsets. Classification (Primary or Ancillary) is for bookkeeping only and
-                does not affect charges yet.
-              </p>
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-[#eadccb] text-left text-xs font-semibold uppercase tracking-[0.2em] text-[#8c7b6c]">
-                      <th className="py-2 pr-4">Type name</th>
-                      <th className="py-2 pr-4">Classification</th>
-                      <th className="py-2 pl-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {applyOrder(budget.unitTypes, unitTypeOrder, (type) => type.name).map((type, index) => (
-                      <tr key={type.name} className="border-b border-[#f2e8dd]">
-                        <td className="py-2 pr-4 align-middle">
-                          <TextField
-                            id={`unittype-name-${index}`}
-                            className={field}
-                            value={type.name}
-                            onChange={(next) => renameUnitType(type.name, next)}
-                            onKeyDown={(event) => handleUnitTypeTab(event, index === budget.unitTypes.length - 1)}
-                          />
-                        </td>
-                        <td className="py-2 pr-4 align-middle">
-                          <select
-                            className={`${fieldBase} w-40`}
-                            value={type.classification}
-                            onChange={(event) =>
-                              patch((draft) => ({
-                                ...draft,
-                                unitTypes: draft.unitTypes.map((t) =>
-                                  t.name === type.name ? { ...t, classification: event.target.value as UnitClassification } : t,
-                                ),
-                              }))
-                            }
-                          >
-                            {UNIT_CLASSIFICATIONS.map((classification) => (
-                              <option key={classification} value={classification}>
-                                {UNIT_CLASSIFICATION_LABELS[classification]}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="py-2 pl-4 align-middle">
-                          <div className="flex items-center justify-end">
-                            <button
-                              type="button"
-                              className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                              aria-label="Remove unit type"
-                              onClick={() =>
-                                patch((draft) => ({ ...draft, unitTypes: draft.unitTypes.filter((t) => t.name !== type.name) }))
-                              }
-                            >
-                              <TrashIcon />
-                            </button>
                           </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {budget.unitTypes.length === 0 ? <p className="mt-3 text-sm italic text-[#9a8a7b]">No unit types.</p> : null}
-              </div>
-            </>
-          )}
-        </section>
-
-        {/* Units */}
-        <section className={card}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              className={`${sectionTitle} flex items-center gap-2`}
-              onClick={() => setCollapsedUnits((value) => !value)}
-            >
-              <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedUnits ? "▸" : "▾"}</span>
-              Units
-              <span className="text-sm font-normal text-[#9a8a7b]">({budget.units.length})</span>
-            </button>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className={pillButton}
-                onClick={() =>
-                  patch((draft) => ({
-                    ...draft,
-                    units: [
-                      ...draft.units,
-                      {
-                        id: makeId("unit"),
-                        label: "New unit",
-                        type: draft.unitTypes[0]?.name ?? "",
-                        commonInterest: 0,
-                        ownerId: draft.owners[0]?.id ?? "",
-                      },
-                    ],
-                  }))
-                }
-              >
-                Add unit
-              </button>
-              <button type="button" className={pillButton} onClick={() => setBatch("unit")}>
-                Batch add
-              </button>
-              <button type="button" className={dangerButton} onClick={() => patch((draft) => ({ ...draft, units: [] }))}>
-                Delete all
-              </button>
-            </div>
-          </div>
-          {collapsedUnits ? null : (
-            <>
-              <p className={`${sectionHint} mt-1`}>
-                Common interests total{" "}
-                <span className={Math.abs(ciSum - 100) <= 0.01 ? "font-semibold text-[#3f7a52]" : "font-semibold text-[#b44b43]"}>
-                  {formatCi(ciSum)}%
-                </span>{" "}
-                (should be as close to 100% as possible). Columns: label, type, common interest %, owner.
-                {Math.abs(ciSum - 100) > 0.01 ? (
-                  <span className="font-semibold text-[#b44b43]"> Off from 100% - double-check the Unit definitions.</span>
-                ) : null}
-              </p>
-              <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3">
-                <div className="flex items-center gap-2">
-                  <span className={groupHeading}>Grouping</span>
-                  <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
-                    <button
-                      type="button"
-                      className={`px-3 py-1.5 ${unitView === "type" ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
-                      onClick={() => setUnitView("type")}
-                    >
-                      By type
-                    </button>
-                    <button
-                      type="button"
-                      className={`px-3 py-1.5 ${unitView === "owner" ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
-                      onClick={() => setUnitView("owner")}
-                    >
-                      By owner
-                    </button>
-                  </div>
-                </div>
-                {unitView === "type" ? (
-                  <div className="flex items-center gap-2">
-                    <span className={groupHeading}>Sort by</span>
-                    <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
-                      {(["label", "ci", "owner"] as UnitSortKey[]).map((key) => {
-                        const active = unitSort?.key === key;
-                        return (
-                          <button
-                            key={key}
-                            type="button"
-                            className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
-                            aria-label={`Sort units by ${UNIT_SORT_LABELS[key].toLowerCase()}${active ? ` (${unitSort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
-                            onClick={() => cycleUnitSort(key)}
-                          >
-                            {UNIT_SORT_LABELS[key]}
-                            {active ? (unitSort.dir === "asc" ? " ↑" : " ↓") : ""}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-              <div className="mt-4 flex flex-col gap-5">
-                {unitGroups.map((group) => {
-                  const groupCi = group.units.reduce((sum, unit) => sum + unit.commonInterest, 0);
-                  const collapsible = unitView === "type";
-                  const collapsed = collapsible && collapsedTypes.has(group.key);
-                  return (
-                    <div key={group.key} className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        {collapsible ? (
-                          <button type="button" className="flex items-center gap-2" onClick={() => toggleType(group.key)}>
-                            <span className="text-lg leading-none text-[#8c7b6c]">{collapsed ? "▸" : "▾"}</span>
-                            <span className={groupHeading}>{group.label || "—"}</span>
-                          </button>
-                        ) : (
-                          <span className={groupHeading}>{group.label || "—"}</span>
-                        )}
-                        <div className="flex items-center gap-2">
-                          {group.classification ? (
-                            <span className="rounded-full border border-[#e6d7c7] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#8c7b6c]">
-                              {UNIT_CLASSIFICATION_LABELS[group.classification]}
-                            </span>
-                          ) : null}
-                          <span className="text-xs text-[#9a8a7b]">{formatCi(groupCi)}%</span>
-                        </div>
-                      </div>
-                      {collapsed ? null : group.units.length === 0 ? (
-                        <p className="text-sm italic text-[#9a8a7b]">No units.</p>
-                      ) : (
-                        group.units.map((unit) => renderUnitRow(unit))
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </section>
-
-        {/* Policies */}
-        <section className={card}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              className={`${sectionTitle} flex items-center gap-2`}
-              onClick={() => setCollapsedPolicies((value) => !value)}
-            >
-              <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedPolicies ? "▸" : "▾"}</span>
-              Policies
-              <span className="text-sm font-normal text-[#9a8a7b]">({budget.policies.length})</span>
-            </button>
-            <button
-              type="button"
-              className={pillButton}
-              onClick={() =>
-                patch((draft) => ({
-                  ...draft,
-                  policies: [
-                    ...draft.policies,
-                    { id: makeId("policy"), name: "New policy", rules: [{ unitTypes: [], weight: 100, method: "common_interest" }] },
-                  ],
-                }))
-              }
-            >
-              Add policy
-            </button>
-          </div>
-          {collapsedPolicies ? null : (
-            <>
-              <p className={`${sectionHint} mt-1`}>
-                Each rule takes an allocation % of the expense and splits it among the selected unit types.
-              </p>
-              <div className="mt-4 flex flex-col gap-4">
-                {budget.policies.map((policy) => {
-                  const weightSum = policy.rules.reduce((sum, rule) => sum + rule.weight, 0);
-                  return (
-                    // biome-ignore lint/a11y/noStaticElementInteractions: native drag-and-drop reorder target
-                    <div
-                      key={policy.id}
-                      data-policy={policy.id}
-                      className={`rounded-2xl border border-[#f2e8dd] bg-[#fffaf3] p-4 transition-opacity ${dragPolicy === policy.id ? "opacity-40" : ""}`}
-                      onDragOver={(event) => {
-                        if (dragPolicy) {
-                          event.preventDefault();
-                          if (dragPolicy !== policy.id) {
-                            movePolicy(dragPolicy, policy.id, isAfterMidpoint(event));
-                          }
-                        }
-                      }}
-                      onDrop={() => setDragPolicy(null)}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          {/* biome-ignore lint/a11y/noStaticElementInteractions: drag handle */}
-                          <span
-                            draggable
-                            onDragStart={(event) => {
-                              setDragPolicy(policy.id);
-                              const card = (event.currentTarget as HTMLElement).closest("[data-policy]");
-                              if (card) {
-                                event.dataTransfer.setDragImage(card, 20, 16);
-                              }
-                            }}
-                            onDragEnd={() => setDragPolicy(null)}
-                            className="cursor-grab select-none text-[#b3a392]"
-                            title="Drag to reorder policy"
-                          >
-                            ☰
-                          </span>
-                          <TextField
-                            className={`${field} max-w-sm`}
-                            value={policy.name}
-                            onChange={(next) =>
-                              patch((draft) => ({
-                                ...draft,
-                                policies: draft.policies.map((p) => (p.id === policy.id ? { ...p, name: next } : p)),
-                              }))
-                            }
-                          />
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={
-                              Math.abs(weightSum - 100) <= 0.01 ? "text-xs text-[#3f7a52]" : "text-xs font-semibold text-[#b44b43]"
-                            }
-                          >
-                            total: {weightSum}%
-                          </span>
-                          <button
-                            type="button"
-                            className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                            aria-label="Remove policy"
-                            onClick={() => patch((draft) => ({ ...draft, policies: draft.policies.filter((p) => p.id !== policy.id) }))}
-                          >
-                            <TrashIcon />
-                          </button>
-                        </div>
-                      </div>
-                      <p className="mt-2 text-xs text-[#5b5148]">
-                        {(() => {
-                          const used = budget.expenses.filter((e) => e.policyId === policy.id).map((e) => e.name || "(unnamed)");
-                          return used.length > 0 ? `Used by: ${used.join(", ")}` : "Not used by any expense.";
-                        })()}
-                      </p>
-                      <div className="mt-3 flex flex-col gap-3">
-                        {policy.rules.map((rule, ruleIndex) => (
-                          // biome-ignore lint/suspicious/noArrayIndexKey: rules are positional and have no stable id
-                          <div key={`${policy.id}-rule-${ruleIndex}`} className="rounded-xl border border-[#eee0d1] bg-white/70 p-3">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <div className="flex flex-wrap items-center gap-3">
-                                <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-[#4a4037]">
-                                  allocation %
-                                  <PercentField
-                                    className={`${fieldBase} w-24`}
-                                    value={rule.weight}
-                                    onChange={(next) =>
-                                      patch((draft) => ({
-                                        ...draft,
-                                        policies: draft.policies.map((p) =>
-                                          p.id === policy.id
-                                            ? { ...p, rules: p.rules.map((r, i) => (i === ruleIndex ? { ...r, weight: next } : r)) }
-                                            : p,
-                                        ),
-                                      }))
-                                    }
-                                  />
-                                </span>
-                                <select
-                                  className={`${fieldBase} w-48`}
-                                  value={rule.method}
-                                  onChange={(event) =>
-                                    patch((draft) => ({
-                                      ...draft,
-                                      policies: draft.policies.map((p) =>
-                                        p.id === policy.id
-                                          ? {
-                                              ...p,
-                                              rules: p.rules.map((r, i) =>
-                                                i === ruleIndex
-                                                  ? { ...r, method: event.target.value as (typeof ALLOCATION_METHODS)[number] }
-                                                  : r,
-                                              ),
-                                            }
-                                          : p,
-                                      ),
-                                    }))
-                                  }
-                                >
-                                  {ALLOCATION_METHODS.map((method) => (
-                                    <option key={method} value={method}>
-                                      {ALLOCATION_METHOD_LABELS[method]}
-                                    </option>
-                                  ))}
-                                </select>
-                                {budget.unitTypes.map((type) => (
-                                  <label key={type.name} className="flex items-center gap-1 text-xs text-[#5b5148]">
-                                    <input
-                                      type="checkbox"
-                                      checked={rule.unitTypes.includes(type.name)}
+                          <p className="mt-2 text-xs text-[#5b5148]">
+                            {(() => {
+                              const used = budget.expenses.filter((e) => e.policyId === policy.id).map((e) => e.name || "(unnamed)");
+                              return used.length > 0 ? `Used by: ${used.join(", ")}` : "Not used by any expense.";
+                            })()}
+                          </p>
+                          <div className="mt-3 flex flex-col gap-3">
+                            {policy.rules.map((rule, ruleIndex) => (
+                              // biome-ignore lint/suspicious/noArrayIndexKey: rules are positional and have no stable id
+                              <div key={`${policy.id}-rule-${ruleIndex}`} className="rounded-xl border border-[#eee0d1] bg-white/70 p-3">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                  <div className="flex flex-wrap items-center gap-3">
+                                    <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-[#4a4037]">
+                                      allocation %
+                                      <PercentField
+                                        className={`${fieldBase} w-24`}
+                                        value={rule.weight}
+                                        onChange={(next) =>
+                                          patch((draft) => ({
+                                            ...draft,
+                                            policies: draft.policies.map((p) =>
+                                              p.id === policy.id
+                                                ? { ...p, rules: p.rules.map((r, i) => (i === ruleIndex ? { ...r, weight: next } : r)) }
+                                                : p,
+                                            ),
+                                          }))
+                                        }
+                                      />
+                                    </span>
+                                    <select
+                                      className={`${fieldBase} w-48`}
+                                      value={rule.method}
                                       onChange={(event) =>
                                         patch((draft) => ({
                                           ...draft,
@@ -1276,12 +1615,7 @@ function HomeContent() {
                                                   ...p,
                                                   rules: p.rules.map((r, i) =>
                                                     i === ruleIndex
-                                                      ? {
-                                                          ...r,
-                                                          unitTypes: event.target.checked
-                                                            ? [...r.unitTypes, type.name]
-                                                            : r.unitTypes.filter((item) => item !== type.name),
-                                                        }
+                                                      ? { ...r, method: event.target.value as (typeof ALLOCATION_METHODS)[number] }
                                                       : r,
                                                   ),
                                                 }
@@ -1289,503 +1623,555 @@ function HomeContent() {
                                           ),
                                         }))
                                       }
-                                    />
-                                    {type.name}
-                                  </label>
-                                ))}
-                                {rule.unitTypes.length === 0 ? (
-                                  <span className="text-xs italic text-[#b44b43]">select unit types</span>
-                                ) : null}
+                                    >
+                                      {ALLOCATION_METHODS.map((method) => (
+                                        <option key={method} value={method}>
+                                          {ALLOCATION_METHOD_LABELS[method]}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    {budget.unitTypes.map((type) => (
+                                      <label key={type.name} className="flex items-center gap-1 text-xs text-[#5b5148]">
+                                        <input
+                                          type="checkbox"
+                                          checked={rule.unitTypes.includes(type.name)}
+                                          onChange={(event) =>
+                                            patch((draft) => ({
+                                              ...draft,
+                                              policies: draft.policies.map((p) =>
+                                                p.id === policy.id
+                                                  ? {
+                                                      ...p,
+                                                      rules: p.rules.map((r, i) =>
+                                                        i === ruleIndex
+                                                          ? {
+                                                              ...r,
+                                                              unitTypes: event.target.checked
+                                                                ? [...r.unitTypes, type.name]
+                                                                : r.unitTypes.filter((item) => item !== type.name),
+                                                            }
+                                                          : r,
+                                                      ),
+                                                    }
+                                                  : p,
+                                              ),
+                                            }))
+                                          }
+                                        />
+                                        {type.name}
+                                      </label>
+                                    ))}
+                                    {rule.unitTypes.length === 0 ? (
+                                      <span className="text-xs italic text-[#b44b43]">select unit types</span>
+                                    ) : null}
+                                  </div>
+                                  {policy.rules.length > 1 ? (
+                                    <button
+                                      type="button"
+                                      className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                      aria-label="Remove rule"
+                                      onClick={() =>
+                                        patch((draft) => ({
+                                          ...draft,
+                                          policies: draft.policies.map((p) =>
+                                            p.id === policy.id ? { ...p, rules: p.rules.filter((_, i) => i !== ruleIndex) } : p,
+                                          ),
+                                        }))
+                                      }
+                                    >
+                                      <TrashIcon />
+                                    </button>
+                                  ) : null}
+                                </div>
                               </div>
-                              {policy.rules.length > 1 ? (
-                                <button
-                                  type="button"
-                                  className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                                  aria-label="Remove rule"
-                                  onClick={() =>
-                                    patch((draft) => ({
-                                      ...draft,
-                                      policies: draft.policies.map((p) =>
-                                        p.id === policy.id ? { ...p, rules: p.rules.filter((_, i) => i !== ruleIndex) } : p,
-                                      ),
-                                    }))
+                            ))}
+                            <button
+                              type="button"
+                              className={`${pillButton} self-start`}
+                              onClick={() =>
+                                patch((draft) => ({
+                                  ...draft,
+                                  policies: draft.policies.map((p) =>
+                                    p.id === policy.id
+                                      ? { ...p, rules: [...p.rules, { unitTypes: [], weight: 0, method: "common_interest" }] }
+                                      : p,
+                                  ),
+                                }))
+                              }
+                            >
+                              Add rule
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </section>
+
+            {/* Expenses */}
+            <section className={card}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  className={`${sectionTitle} flex items-center gap-2`}
+                  onClick={() => setCollapsedExpenses((value) => !value)}
+                >
+                  <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedExpenses ? "▸" : "▾"}</span>
+                  Expenses
+                  <span className="text-sm font-normal text-[#9a8a7b]">({budget.expenses.length})</span>
+                </button>
+              </div>
+              {collapsedExpenses ? null : (
+                <>
+                  <p className={`${sectionHint} mt-1`}>
+                    Grouped by category. Each line item is a per-year cost and a policy that decides how it is split. Drag the ☰ handle to
+                    reorder categories, or sort the line items within a category by name, amount, or split.
+                  </p>
+                  <div className="mt-4 flex flex-col gap-5">
+                    {expenseCategories.map((category) => {
+                      const sort = expenseSort[category];
+                      const items = applyOrder(
+                        budget.expenses.filter((expense) => expense.category === category),
+                        expenseOrder[category] ?? [],
+                        (expense) => expense.id,
+                      );
+                      return (
+                        // biome-ignore lint/a11y/noStaticElementInteractions: native drag-and-drop reorder target
+                        <div
+                          key={category}
+                          data-cat={category}
+                          className={`flex flex-col gap-2 transition-opacity ${dragCategory === category ? "opacity-40" : ""}`}
+                          onDragOver={(event) => {
+                            if (dragCategory) {
+                              event.preventDefault();
+                              if (dragCategory !== category) {
+                                moveCategory(dragCategory, category);
+                              }
+                            }
+                          }}
+                          onDrop={() => setDragCategory(null)}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              {/* biome-ignore lint/a11y/noStaticElementInteractions: drag handle */}
+                              <span
+                                draggable
+                                onDragStart={(event) => {
+                                  setDragCategory(category);
+                                  const group = (event.currentTarget as HTMLElement).closest("[data-cat]");
+                                  if (group) {
+                                    event.dataTransfer.setDragImage(group, 20, 16);
                                   }
-                                >
-                                  <TrashIcon />
-                                </button>
+                                }}
+                                onDragEnd={() => setDragCategory(null)}
+                                className="cursor-grab select-none text-[#b3a392]"
+                                title={`Drag to reorder category ${category}`}
+                              >
+                                ☰
+                              </span>
+                              <CategoryName category={category} onRename={renameCategory} />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {items.length > 1 ? (
+                                <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                                  {(["name", "amount", "split"] as ExpenseSortKey[]).map((key) => {
+                                    const active = sort?.key === key;
+                                    return (
+                                      <button
+                                        key={key}
+                                        type="button"
+                                        className={`px-2.5 py-1 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                                        aria-label={`Sort ${category} by ${EXPENSE_SORT_LABELS[key].toLowerCase()}${active ? ` (${sort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
+                                        onClick={() => cycleExpenseSort(category, key)}
+                                      >
+                                        {EXPENSE_SORT_LABELS[key]}
+                                        {active ? (sort.dir === "asc" ? " ↑" : " ↓") : ""}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                               ) : null}
+                              <button
+                                type="button"
+                                className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                aria-label={`Remove category ${category}`}
+                                onClick={() =>
+                                  patch((draft) => ({
+                                    ...draft,
+                                    categories: draft.categories.filter((item) => item !== category),
+                                    expenses: draft.expenses.filter((expense) => expense.category !== category),
+                                  }))
+                                }
+                              >
+                                <TrashIcon />
+                              </button>
                             </div>
                           </div>
-                        ))}
-                        <button
-                          type="button"
-                          className={`${pillButton} self-start`}
-                          onClick={() =>
-                            patch((draft) => ({
-                              ...draft,
-                              policies: draft.policies.map((p) =>
-                                p.id === policy.id
-                                  ? { ...p, rules: [...p.rules, { unitTypes: [], weight: 0, method: "common_interest" }] }
-                                  : p,
-                              ),
-                            }))
-                          }
-                        >
-                          Add rule
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </section>
-
-        {/* Expenses */}
-        <section className={card}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              className={`${sectionTitle} flex items-center gap-2`}
-              onClick={() => setCollapsedExpenses((value) => !value)}
-            >
-              <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedExpenses ? "▸" : "▾"}</span>
-              Expenses
-              <span className="text-sm font-normal text-[#9a8a7b]">({budget.expenses.length})</span>
-            </button>
-          </div>
-          {collapsedExpenses ? null : (
-            <>
-              <p className={`${sectionHint} mt-1`}>
-                Grouped by category. Each line item is a per-year cost and a policy that decides how it is split. Drag the ☰ handle to
-                reorder categories, or sort the line items within a category by name, amount, or split.
-              </p>
-              <div className="mt-4 flex flex-col gap-5">
-                {expenseCategories.map((category) => {
-                  const sort = expenseSort[category];
-                  const items = applyOrder(
-                    budget.expenses.filter((expense) => expense.category === category),
-                    expenseOrder[category] ?? [],
-                    (expense) => expense.id,
-                  );
-                  return (
-                    // biome-ignore lint/a11y/noStaticElementInteractions: native drag-and-drop reorder target
-                    <div
-                      key={category}
-                      data-cat={category}
-                      className={`flex flex-col gap-2 transition-opacity ${dragCategory === category ? "opacity-40" : ""}`}
-                      onDragOver={(event) => {
-                        if (dragCategory) {
-                          event.preventDefault();
-                          if (dragCategory !== category) {
-                            moveCategory(dragCategory, category);
-                          }
-                        }
-                      }}
-                      onDrop={() => setDragCategory(null)}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          {/* biome-ignore lint/a11y/noStaticElementInteractions: drag handle */}
-                          <span
-                            draggable
-                            onDragStart={(event) => {
-                              setDragCategory(category);
-                              const group = (event.currentTarget as HTMLElement).closest("[data-cat]");
-                              if (group) {
-                                event.dataTransfer.setDragImage(group, 20, 16);
-                              }
-                            }}
-                            onDragEnd={() => setDragCategory(null)}
-                            className="cursor-grab select-none text-[#b3a392]"
-                            title={`Drag to reorder category ${category}`}
-                          >
-                            ☰
-                          </span>
-                          <CategoryName category={category} onRename={renameCategory} />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {items.length > 1 ? (
-                            <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
-                              {(["name", "amount", "split"] as ExpenseSortKey[]).map((key) => {
-                                const active = sort?.key === key;
-                                return (
-                                  <button
-                                    key={key}
-                                    type="button"
-                                    className={`px-2.5 py-1 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
-                                    aria-label={`Sort ${category} by ${EXPENSE_SORT_LABELS[key].toLowerCase()}${active ? ` (${sort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
-                                    onClick={() => cycleExpenseSort(category, key)}
-                                  >
-                                    {EXPENSE_SORT_LABELS[key]}
-                                    {active ? (sort.dir === "asc" ? " ↑" : " ↓") : ""}
-                                  </button>
-                                );
-                              })}
+                          {items.map((expense, expenseIndex) => (
+                            <div
+                              key={expense.id}
+                              className="grid gap-2 transition-opacity sm:grid-cols-[1.4fr_1fr_1.6fr_auto] sm:items-center"
+                            >
+                              <TextField
+                                id={`expense-name-${expense.id}`}
+                                className={field}
+                                value={expense.name}
+                                placeholder="New expense"
+                                onChange={(next) =>
+                                  patch((draft) => ({
+                                    ...draft,
+                                    expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, name: next } : e)),
+                                  }))
+                                }
+                              />
+                              <CurrencyField
+                                className={field}
+                                value={expense.amount}
+                                onChange={(next) =>
+                                  patch((draft) => ({
+                                    ...draft,
+                                    expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, amount: next } : e)),
+                                  }))
+                                }
+                              />
+                              <select
+                                className={field}
+                                value={expense.policyId}
+                                onChange={(event) =>
+                                  patch((draft) => ({
+                                    ...draft,
+                                    expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, policyId: event.target.value } : e)),
+                                  }))
+                                }
+                                onKeyDown={(event) => {
+                                  if (event.key === "Tab" && !event.shiftKey && expenseIndex === items.length - 1) {
+                                    event.preventDefault();
+                                    addExpenseAndFocus(category);
+                                  }
+                                }}
+                              >
+                                {budget.policies.map((policy) => (
+                                  <option key={policy.id} value={policy.id}>
+                                    {policy.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                aria-label="Remove expense"
+                                onClick={() =>
+                                  patch((draft) => ({ ...draft, expenses: draft.expenses.filter((e) => e.id !== expense.id) }))
+                                }
+                              >
+                                <TrashIcon />
+                              </button>
                             </div>
-                          ) : null}
-                          <button
-                            type="button"
-                            className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                            aria-label={`Remove category ${category}`}
-                            onClick={() =>
-                              patch((draft) => ({
-                                ...draft,
-                                categories: draft.categories.filter((item) => item !== category),
-                                expenses: draft.expenses.filter((expense) => expense.category !== category),
-                              }))
-                            }
-                          >
-                            <TrashIcon />
+                          ))}
+                          <button type="button" className={`${pillButton} self-start`} onClick={() => addExpenseAndFocus(category)}>
+                            Add expense
                           </button>
                         </div>
-                      </div>
-                      {items.map((expense, expenseIndex) => (
-                        <div key={expense.id} className="grid gap-2 transition-opacity sm:grid-cols-[1.4fr_1fr_1.6fr_auto] sm:items-center">
-                          <TextField
-                            id={`expense-name-${expense.id}`}
-                            className={field}
-                            value={expense.name}
-                            placeholder="New expense"
-                            onChange={(next) =>
-                              patch((draft) => ({
-                                ...draft,
-                                expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, name: next } : e)),
-                              }))
-                            }
-                          />
-                          <CurrencyField
-                            className={field}
-                            value={expense.amount}
-                            onChange={(next) =>
-                              patch((draft) => ({
-                                ...draft,
-                                expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, amount: next } : e)),
-                              }))
-                            }
-                          />
-                          <select
-                            className={field}
-                            value={expense.policyId}
-                            onChange={(event) =>
-                              patch((draft) => ({
-                                ...draft,
-                                expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, policyId: event.target.value } : e)),
-                              }))
-                            }
-                            onKeyDown={(event) => {
-                              if (event.key === "Tab" && !event.shiftKey && expenseIndex === items.length - 1) {
-                                event.preventDefault();
-                                addExpenseAndFocus(category);
-                              }
-                            }}
-                          >
-                            {budget.policies.map((policy) => (
-                              <option key={policy.id} value={policy.id}>
-                                {policy.name}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                            aria-label="Remove expense"
-                            onClick={() => patch((draft) => ({ ...draft, expenses: draft.expenses.filter((e) => e.id !== expense.id) }))}
-                          >
-                            <TrashIcon />
-                          </button>
-                        </div>
-                      ))}
-                      <button type="button" className={`${pillButton} self-start`} onClick={() => addExpenseAndFocus(category)}>
-                        Add expense
-                      </button>
+                      );
+                    })}
+                    <InlineAdd
+                      placeholder="Add category"
+                      onAdd={(value) =>
+                        patch((draft) =>
+                          draft.categories.includes(value) ? draft : { ...draft, categories: [...draft.categories, value] },
+                        )
+                      }
+                    />
+                    <div className="mt-2 flex items-center justify-between border-t border-[#eadccb] pt-3 text-sm font-semibold text-[#181716]">
+                      <span>Total expenses</span>
+                      <span>{formatCurrency(budget.expenses.reduce((sum, expense) => sum + expense.amount, 0))}/yr</span>
                     </div>
-                  );
-                })}
-                <InlineAdd
-                  placeholder="Add category"
-                  onAdd={(value) =>
-                    patch((draft) => (draft.categories.includes(value) ? draft : { ...draft, categories: [...draft.categories, value] }))
-                  }
-                />
-                <div className="mt-2 flex items-center justify-between border-t border-[#eadccb] pt-3 text-sm font-semibold text-[#181716]">
-                  <span>Total expenses</span>
-                  <span>{formatCurrency(budget.expenses.reduce((sum, expense) => sum + expense.amount, 0))}/yr</span>
-                </div>
+                  </div>
+                </>
+              )}
+            </section>
+
+            {/* Adjustments */}
+            <section className={card}>
+              <h2 className={sectionTitle}>Adjustments</h2>
+              <p className={sectionHint}>
+                Inflation scales the entered expense amounts. Reserve is added on top for savings. Offsets adjust every unit of a type (e.g.
+                -5% to Commercial). Other income (e.g. laundry) is subtracted from the total, spread by each unit's share.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-6">
+                <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
+                  Inflation %
+                  <PercentField
+                    className={`${fieldBase} w-28`}
+                    value={budget.adjustments.inflationPct}
+                    onChange={(next) => patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, inflationPct: next } }))}
+                  />
+                </span>
+                <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
+                  Reserve %
+                  <PercentField
+                    className={`${fieldBase} w-28`}
+                    value={budget.adjustments.reservePct}
+                    onChange={(next) => patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, reservePct: next } }))}
+                  />
+                </span>
+                <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
+                  Other income $/yr
+                  <CurrencyField
+                    className={`${fieldBase} w-36`}
+                    value={budget.adjustments.incomeOffset ?? 0}
+                    onChange={(next) => patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, incomeOffset: next } }))}
+                  />
+                </span>
               </div>
-            </>
-          )}
-        </section>
 
-        {/* Adjustments */}
-        <section className={card}>
-          <h2 className={sectionTitle}>Adjustments</h2>
-          <p className={sectionHint}>
-            Inflation scales the entered expense amounts. Reserve is added on top for savings. Offsets adjust every unit of a type (e.g. -5%
-            to Commercial). Other income (e.g. laundry) is subtracted from the total, spread by each unit's share.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-6">
-            <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
-              Inflation %
-              <PercentField
-                className={`${fieldBase} w-28`}
-                value={budget.adjustments.inflationPct}
-                onChange={(next) => patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, inflationPct: next } }))}
-              />
-            </span>
-            <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
-              Reserve %
-              <PercentField
-                className={`${fieldBase} w-28`}
-                value={budget.adjustments.reservePct}
-                onChange={(next) => patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, reservePct: next } }))}
-              />
-            </span>
-            <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
-              Other income $/yr
-              <CurrencyField
-                className={`${fieldBase} w-36`}
-                value={budget.adjustments.incomeOffset ?? 0}
-                onChange={(next) => patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, incomeOffset: next } }))}
-              />
-            </span>
-          </div>
-
-          <div className="mt-5 flex items-center justify-between gap-3">
-            <span className={groupHeading}>Unit-type offsets</span>
-            <button
-              type="button"
-              className={pillButton}
-              onClick={() =>
-                patch((draft) => ({
-                  ...draft,
-                  adjustments: {
-                    ...draft.adjustments,
-                    offsets: [...(draft.adjustments.offsets ?? []), { unitType: draft.unitTypes[0]?.name ?? "", pct: 0 }],
-                  },
-                }))
-              }
-            >
-              Add offset
-            </button>
-          </div>
-          <div className="mt-2 flex flex-col gap-2">
-            {(budget.adjustments.offsets ?? []).map((offset, offsetIndex) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: offsets are positional and have no stable id
-              <div key={`offset-${offsetIndex}`} className="flex flex-wrap items-center gap-2">
-                <select
-                  className={`${field} max-w-xs`}
-                  value={offset.unitType}
-                  onChange={(event) =>
+              <div className="mt-5 flex items-center justify-between gap-3">
+                <span className={groupHeading}>Unit-type offsets</span>
+                <button
+                  type="button"
+                  className={pillButton}
+                  onClick={() =>
                     patch((draft) => ({
                       ...draft,
                       adjustments: {
                         ...draft.adjustments,
-                        offsets: (draft.adjustments.offsets ?? []).map((o, i) =>
-                          i === offsetIndex ? { ...o, unitType: event.target.value } : o,
-                        ),
+                        offsets: [...(draft.adjustments.offsets ?? []), { unitType: draft.unitTypes[0]?.name ?? "", pct: 0 }],
                       },
                     }))
                   }
                 >
-                  {budget.unitTypes.map((type) => (
-                    <option key={type.name} value={type.name}>
-                      {type.name}
-                    </option>
-                  ))}
-                </select>
-                <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-[#4a4037]">
-                  offset %
-                  <NumberField
-                    className={`${fieldBase} w-24`}
-                    value={offset.pct}
-                    onChange={(next) =>
-                      patch((draft) => ({
-                        ...draft,
-                        adjustments: {
-                          ...draft.adjustments,
-                          offsets: (draft.adjustments.offsets ?? []).map((o, i) => (i === offsetIndex ? { ...o, pct: next } : o)),
-                        },
-                      }))
-                    }
-                  />
-                </span>
-                <button
-                  type="button"
-                  className={removeButton}
-                  onClick={() =>
-                    patch((draft) => ({
-                      ...draft,
-                      adjustments: { ...draft.adjustments, offsets: (draft.adjustments.offsets ?? []).filter((_, i) => i !== offsetIndex) },
-                    }))
-                  }
-                >
-                  Remove
+                  Add offset
                 </button>
               </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Charges per owner */}
-        <section className={card}>
-          <h2 className={sectionTitle}>Charges per owner</h2>
-          <div className="flex items-start justify-between gap-3">
-            <p className={sectionHint}>
-              Total {formatCurrency(result.totals.total)}/yr (base {formatCurrency(result.totals.base)}
-              {budget.adjustments.inflationPct !== 0 ? ` incl. ${budget.adjustments.inflationPct}% inflation` : ""}
-              {Math.abs(result.totals.offset) > 0.01
-                ? ` ${result.totals.offset < 0 ? "-" : "+"} offsets ${formatCurrency(Math.abs(result.totals.offset))}`
-                : ""}
-              {Math.abs(result.totals.income) > 0.01
-                ? ` ${result.totals.income < 0 ? "-" : "+"} other income ${formatCurrency(Math.abs(result.totals.income))}`
-                : ""}
-              {result.totals.reserve > 0.01 ? ` + reserve ${formatCurrency(result.totals.reserve)}` : ""}).{" "}
-              {result.unallocated > 0.01 ? (
-                <span className="font-semibold text-[#b44b43]">{formatCurrency(result.unallocated)} unallocated.</span>
-              ) : null}
-            </p>
-            <button
-              type="button"
-              className={`${iconButton} ${showBreakdown ? "bg-[#1b1a17] text-white" : ""}`}
-              aria-label={showBreakdown ? "Hide breakdown" : "Show breakdown"}
-              title={showBreakdown ? "Hide breakdown" : "Show breakdown"}
-              onClick={() => setShowBreakdown((value) => !value)}
-            >
-              <SearchIcon />
-            </button>
-          </div>
-          <div className="mt-4 flex flex-col gap-4">
-            {result.perOwner.map((owner) => (
-              <div key={owner.ownerId} className="rounded-2xl border border-[#f2e8dd] bg-[#fffaf3] p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <span className={`font-semibold ${owner.excluded ? "text-[#a89a8b]" : "text-[#181716]"}`}>
-                    {owner.name}
-                    {owner.excluded ? <span className="ml-2 text-xs italic">excluded</span> : null}
-                  </span>
-                  <span className={`font-semibold ${owner.excluded ? "text-[#a89a8b]" : "text-[#181716]"}`}>
-                    {formatCurrency(owner.monthly)}/mo
-                  </span>
-                </div>
-                {owner.excluded
-                  ? null
-                  : (() => {
-                      const delta = owner.monthly - owner.currentMonthly;
-                      const up = delta >= 0;
-                      const color = Math.abs(delta) < 0.01 ? "text-[#5b5148]" : up ? "text-[#b44b43]" : "text-[#3f7a52]";
-                      return (
-                        <div className="mt-1 text-sm text-[#5b5148]">
-                          current {formatCurrency(owner.currentMonthly)}/mo &rarr; new {formatCurrency(owner.monthly)}/mo{" "}
-                          <span className={`font-semibold ${color}`}>
-                            ({up ? "+" : "-"}
-                            {formatCurrency(Math.abs(delta))}/mo
-                            {owner.currentMonthly > 0
-                              ? `, ${up ? "+" : "-"}${Math.abs((delta / owner.currentMonthly) * 100).toFixed(1)}%`
-                              : ""}
-                            )
-                          </span>
-                        </div>
-                      );
-                    })()}
-                <div className={`mt-3 grid gap-4 ${showBreakdown ? "md:grid-cols-2" : ""}`}>
-                  <div className="flex flex-col gap-1">
-                    <p className={groupHeading}>Per unit</p>
-                    {(unitsByOwner.get(owner.ownerId) ?? []).map((unit) => (
-                      <div key={unit.unitId} className="flex items-center justify-between text-sm text-[#4a4037]">
-                        <span>
-                          {unit.label} <span className="text-xs text-[#9a8a7b]">({unit.type})</span>
-                        </span>
-                        <span>{formatCurrency(unit.monthly)}/mo</span>
-                      </div>
-                    ))}
-                  </div>
-                  {showBreakdown ? (
-                    <div className="flex flex-col gap-2">
-                      <p className={groupHeading}>Breakdown ($/mo)</p>
-                      {(() => {
-                        const units = unitsByOwner.get(owner.ownerId) ?? [];
-                        if (units.length === 0) {
-                          return <p className="text-sm italic text-[#9a8a7b]">No units.</p>;
+              <div className="mt-2 flex flex-col gap-2">
+                {(budget.adjustments.offsets ?? []).map((offset, offsetIndex) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: offsets are positional and have no stable id
+                  <div key={`offset-${offsetIndex}`} className="flex flex-wrap items-center gap-2">
+                    <select
+                      className={`${field} max-w-xs`}
+                      value={offset.unitType}
+                      onChange={(event) =>
+                        patch((draft) => ({
+                          ...draft,
+                          adjustments: {
+                            ...draft.adjustments,
+                            offsets: (draft.adjustments.offsets ?? []).map((o, i) =>
+                              i === offsetIndex ? { ...o, unitType: event.target.value } : o,
+                            ),
+                          },
+                        }))
+                      }
+                    >
+                      {budget.unitTypes.map((type) => (
+                        <option key={type.name} value={type.name}>
+                          {type.name}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-[#4a4037]">
+                      offset %
+                      <NumberField
+                        className={`${fieldBase} w-24`}
+                        value={offset.pct}
+                        onChange={(next) =>
+                          patch((draft) => ({
+                            ...draft,
+                            adjustments: {
+                              ...draft.adjustments,
+                              offsets: (draft.adjustments.offsets ?? []).map((o, i) => (i === offsetIndex ? { ...o, pct: next } : o)),
+                            },
+                          }))
                         }
-                        const rows = budget.expenses.filter((expense) => units.some((u) => Math.abs(u.byExpense[expense.id] ?? 0) > 0.005));
-                        const showOffset = units.some((u) => Math.abs(u.offset) > 0.005);
-                        const showIncome = units.some((u) => Math.abs(u.income) > 0.005);
-                        const showReserve = units.some((u) => Math.abs(u.reserve) > 0.005);
-                        return (
-                          <div className="overflow-x-auto">
-                            <table className="w-full border-collapse text-xs">
-                              <thead>
-                                <tr className="text-left text-[#8c7b6c]">
-                                  <th className="py-1 pr-3 font-semibold" />
-                                  {units.map((u) => (
-                                    <th key={u.unitId} className="py-1 pl-3 text-right font-semibold">
-                                      {u.label}
-                                    </th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody className="text-[#4a4037]">
-                                {rows.map((expense) => (
-                                  <tr key={expense.id} className="border-t border-[#f2e8dd]">
-                                    <td className="py-1 pr-3">{expenseName.get(expense.id)}</td>
-                                    {units.map((u) => (
-                                      <td key={u.unitId} className="py-1 pl-3 text-right">
-                                        {formatCurrency((u.byExpense[expense.id] ?? 0) / 12)}
-                                      </td>
-                                    ))}
-                                  </tr>
-                                ))}
-                                {showOffset ? (
-                                  <tr className="border-t border-[#f2e8dd]">
-                                    <td className="py-1 pr-3">Offset</td>
-                                    {units.map((u) => (
-                                      <td key={u.unitId} className="py-1 pl-3 text-right">
-                                        {formatCurrency(u.offset / 12)}
-                                      </td>
-                                    ))}
-                                  </tr>
-                                ) : null}
-                                {showIncome ? (
-                                  <tr className="border-t border-[#f2e8dd]">
-                                    <td className="py-1 pr-3">Income</td>
-                                    {units.map((u) => (
-                                      <td key={u.unitId} className="py-1 pl-3 text-right">
-                                        {formatCurrency(u.income / 12)}
-                                      </td>
-                                    ))}
-                                  </tr>
-                                ) : null}
-                                {showReserve ? (
-                                  <tr className="border-t border-[#f2e8dd]">
-                                    <td className="py-1 pr-3">Reserve</td>
-                                    {units.map((u) => (
-                                      <td key={u.unitId} className="py-1 pl-3 text-right">
-                                        {formatCurrency(u.reserve / 12)}
-                                      </td>
-                                    ))}
-                                  </tr>
-                                ) : null}
-                                <tr className="border-t border-[#eadccb] font-semibold text-[#181716]">
-                                  <td className="py-1 pr-3">Total</td>
-                                  {units.map((u) => (
-                                    <td key={u.unitId} className="py-1 pl-3 text-right">
-                                      {formatCurrency(u.monthly)}
-                                    </td>
-                                  ))}
-                                </tr>
-                              </tbody>
-                            </table>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  ) : null}
-                </div>
+                      />
+                    </span>
+                    <button
+                      type="button"
+                      className={removeButton}
+                      onClick={() =>
+                        patch((draft) => ({
+                          ...draft,
+                          adjustments: {
+                            ...draft.adjustments,
+                            offsets: (draft.adjustments.offsets ?? []).filter((_, i) => i !== offsetIndex),
+                          },
+                        }))
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </section>
+            </section>
+          </>
+        ) : null}
+
+        {activeTab === "output" ? (
+          <>
+            {/* Charges per owner */}
+            <section className={card}>
+              <h2 className={sectionTitle}>Charges per owner</h2>
+              <div className="flex items-start justify-between gap-3">
+                <p className={sectionHint}>
+                  Total {formatCurrency(result.totals.total)}/yr (base {formatCurrency(result.totals.base)}
+                  {budget.adjustments.inflationPct !== 0 ? ` incl. ${budget.adjustments.inflationPct}% inflation` : ""}
+                  {Math.abs(result.totals.offset) > 0.01
+                    ? ` ${result.totals.offset < 0 ? "-" : "+"} offsets ${formatCurrency(Math.abs(result.totals.offset))}`
+                    : ""}
+                  {Math.abs(result.totals.income) > 0.01
+                    ? ` ${result.totals.income < 0 ? "-" : "+"} other income ${formatCurrency(Math.abs(result.totals.income))}`
+                    : ""}
+                  {result.totals.reserve > 0.01 ? ` + reserve ${formatCurrency(result.totals.reserve)}` : ""}).{" "}
+                  {result.unallocated > 0.01 ? (
+                    <span className="font-semibold text-[#b44b43]">{formatCurrency(result.unallocated)} unallocated.</span>
+                  ) : null}
+                </p>
+                <button
+                  type="button"
+                  className={`${iconButton} ${showBreakdown ? "bg-[#1b1a17] text-white" : ""}`}
+                  aria-label={showBreakdown ? "Hide breakdown" : "Show breakdown"}
+                  title={showBreakdown ? "Hide breakdown" : "Show breakdown"}
+                  onClick={() => setShowBreakdown((value) => !value)}
+                >
+                  <SearchIcon />
+                </button>
+              </div>
+              <div className="mt-4 flex flex-col gap-4">
+                {result.perOwner.map((owner) => (
+                  <div key={owner.ownerId} className="rounded-2xl border border-[#f2e8dd] bg-[#fffaf3] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className={`font-semibold ${owner.excluded ? "text-[#a89a8b]" : "text-[#181716]"}`}>
+                        {owner.name}
+                        {owner.excluded ? <span className="ml-2 text-xs italic">excluded</span> : null}
+                      </span>
+                      <span className={`font-semibold ${owner.excluded ? "text-[#a89a8b]" : "text-[#181716]"}`}>
+                        {formatCurrency(owner.monthly)}/mo
+                      </span>
+                    </div>
+                    {owner.excluded
+                      ? null
+                      : (() => {
+                          const delta = owner.monthly - owner.currentMonthly;
+                          const up = delta >= 0;
+                          const color = Math.abs(delta) < 0.01 ? "text-[#5b5148]" : up ? "text-[#b44b43]" : "text-[#3f7a52]";
+                          return (
+                            <div className="mt-1 text-sm text-[#5b5148]">
+                              current {formatCurrency(owner.currentMonthly)}/mo &rarr; new {formatCurrency(owner.monthly)}/mo{" "}
+                              <span className={`font-semibold ${color}`}>
+                                ({up ? "+" : "-"}
+                                {formatCurrency(Math.abs(delta))}/mo
+                                {owner.currentMonthly > 0
+                                  ? `, ${up ? "+" : "-"}${Math.abs((delta / owner.currentMonthly) * 100).toFixed(1)}%`
+                                  : ""}
+                                )
+                              </span>
+                            </div>
+                          );
+                        })()}
+                    <div className={`mt-3 grid gap-4 ${showBreakdown ? "md:grid-cols-2" : ""}`}>
+                      <div className="flex flex-col gap-1">
+                        <p className={groupHeading}>Per unit</p>
+                        {(unitsByOwner.get(owner.ownerId) ?? []).map((unit) => (
+                          <div key={unit.unitId} className="flex items-center justify-between text-sm text-[#4a4037]">
+                            <span>
+                              {unit.label} <span className="text-xs text-[#9a8a7b]">({unit.type})</span>
+                            </span>
+                            <span>{formatCurrency(unit.monthly)}/mo</span>
+                          </div>
+                        ))}
+                      </div>
+                      {showBreakdown ? (
+                        <div className="flex flex-col gap-2">
+                          <p className={groupHeading}>Breakdown ($/mo)</p>
+                          {(() => {
+                            const units = unitsByOwner.get(owner.ownerId) ?? [];
+                            if (units.length === 0) {
+                              return <p className="text-sm italic text-[#9a8a7b]">No units.</p>;
+                            }
+                            const rows = budget.expenses.filter((expense) =>
+                              units.some((u) => Math.abs(u.byExpense[expense.id] ?? 0) > 0.005),
+                            );
+                            const showOffset = units.some((u) => Math.abs(u.offset) > 0.005);
+                            const showIncome = units.some((u) => Math.abs(u.income) > 0.005);
+                            const showReserve = units.some((u) => Math.abs(u.reserve) > 0.005);
+                            return (
+                              <div className="overflow-x-auto">
+                                <table className="w-full border-collapse text-xs">
+                                  <thead>
+                                    <tr className="text-left text-[#8c7b6c]">
+                                      <th className="py-1 pr-3 font-semibold" />
+                                      {units.map((u) => (
+                                        <th key={u.unitId} className="py-1 pl-3 text-right font-semibold">
+                                          {u.label}
+                                        </th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody className="text-[#4a4037]">
+                                    {rows.map((expense) => (
+                                      <tr key={expense.id} className="border-t border-[#f2e8dd]">
+                                        <td className="py-1 pr-3">{expenseName.get(expense.id)}</td>
+                                        {units.map((u) => (
+                                          <td key={u.unitId} className="py-1 pl-3 text-right">
+                                            {formatCurrency((u.byExpense[expense.id] ?? 0) / 12)}
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    ))}
+                                    {showOffset ? (
+                                      <tr className="border-t border-[#f2e8dd]">
+                                        <td className="py-1 pr-3">Offset</td>
+                                        {units.map((u) => (
+                                          <td key={u.unitId} className="py-1 pl-3 text-right">
+                                            {formatCurrency(u.offset / 12)}
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    ) : null}
+                                    {showIncome ? (
+                                      <tr className="border-t border-[#f2e8dd]">
+                                        <td className="py-1 pr-3">Income</td>
+                                        {units.map((u) => (
+                                          <td key={u.unitId} className="py-1 pl-3 text-right">
+                                            {formatCurrency(u.income / 12)}
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    ) : null}
+                                    {showReserve ? (
+                                      <tr className="border-t border-[#f2e8dd]">
+                                        <td className="py-1 pr-3">Reserve</td>
+                                        {units.map((u) => (
+                                          <td key={u.unitId} className="py-1 pl-3 text-right">
+                                            {formatCurrency(u.reserve / 12)}
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    ) : null}
+                                    <tr className="border-t border-[#eadccb] font-semibold text-[#181716]">
+                                      <td className="py-1 pr-3">Total</td>
+                                      {units.map((u) => (
+                                        <td key={u.unitId} className="py-1 pl-3 text-right">
+                                          {formatCurrency(u.monthly)}
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </>
+        ) : null}
       </main>
 
       {batch !== null ? (
