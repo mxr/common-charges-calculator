@@ -7,9 +7,29 @@ import { DEFAULT_BUDGET, makeId, validateBudget } from "../lib/budget";
 import { formatCurrency } from "../lib/format";
 import { parseOwnerLines, parseUnitLines, parseUnitTypeLines } from "../lib/parse";
 import { exportBudgetJson, parseBudgetJson, parseBudgetUrl, serializeBudgetUrl } from "../lib/serialize";
+import {
+  applyOrder,
+  compareExpenses,
+  compareOwners,
+  compareUnits,
+  compareUnitTypes,
+  deriveOrder,
+  EXPENSE_SORT_LABELS,
+  nextSortDir,
+  OWNER_SORT_LABELS,
+  parseSortParam,
+  passesTypeFilter,
+  passesUnitFilter,
+  serializeSortParam,
+  UNIT_FILTER_LABELS,
+  UNIT_FILTERS,
+  UNIT_SORT_LABELS,
+  UNIT_TYPE_SORT_LABELS,
+} from "../lib/sort";
 import { ALLOCATION_METHOD_LABELS, ALLOCATION_METHODS, UNIT_CLASSIFICATION_LABELS, UNIT_CLASSIFICATIONS } from "../lib/types";
 import type { UnitCharge } from "../lib/allocate";
-import type { Budget, Expense, Owner, Unit, UnitClassification, UnitType } from "../lib/types";
+import type { ExpenseSortKey, OwnerSortKey, SortState, UnitFilter, UnitSortKey, UnitTypeSortKey } from "../lib/sort";
+import type { Budget, Owner, Unit, UnitClassification, UnitType } from "../lib/types";
 
 const card = "rounded-3xl border border-[#e7d7c8] bg-white/80 p-6 shadow-[0_20px_60px_rgba(120,96,77,0.12)] backdrop-blur";
 const sectionTitle = "text-2xl font-semibold text-[#181716]";
@@ -28,170 +48,6 @@ const dangerButton =
 const groupHeading = "text-xs font-semibold uppercase tracking-[0.25em] text-[#8c7b6c]";
 const iconButton =
   "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#d8c7b5] text-[#5b5148] transition hover:-translate-y-0.5 hover:bg-[#f1e7db]";
-
-type ExpenseSortKey = "name" | "amount" | "split";
-
-const EXPENSE_SORT_LABELS: Record<ExpenseSortKey, string> = {
-  name: "Name",
-  amount: "Amount",
-  split: "Split",
-};
-
-type UnitSortKey = "label" | "ci";
-
-const UNIT_SORT_LABELS: Record<UnitSortKey, string> = {
-  label: "Number",
-  ci: "Common interest",
-};
-
-type UnitFilter = "all" | "primary" | "ancillary";
-
-const UNIT_FILTER_LABELS: Record<UnitFilter, string> = {
-  all: "All",
-  primary: "Primary",
-  ancillary: "Ancillary",
-};
-
-const UNIT_FILTERS: UnitFilter[] = ["all", "primary", "ancillary"];
-
-type OwnerSortKey = "name" | "currentMonthly";
-
-const OWNER_SORT_LABELS: Record<OwnerSortKey, string> = {
-  name: "Name",
-  currentMonthly: "Current $/mo",
-};
-
-type UnitTypeSortKey = "name" | "classification";
-
-const UNIT_TYPE_SORT_LABELS: Record<UnitTypeSortKey, string> = {
-  name: "Name",
-  classification: "Classification",
-};
-
-type SortState<K> = { key: K; dir: "asc" | "desc" };
-
-// Reorder `items` to match the saved id order. Items missing from `orderIds` keep their entry order
-// at the end. The sort that produced `orderIds` ran on the prior display order, so a single-key
-// sort cascades: equal values keep whatever order the previous sort left them in.
-function applyOrder<T>(items: T[], orderIds: string[], idOf: (item: T) => string): T[] {
-  if (orderIds.length === 0) {
-    return [...items];
-  }
-  const rank = new Map(orderIds.map((id, index) => [id, index]));
-  return [...items].sort((a, b) => (rank.get(idOf(a)) ?? Number.POSITIVE_INFINITY) - (rank.get(idOf(b)) ?? Number.POSITIVE_INFINITY));
-}
-
-// Next direction when a sort key is clicked: a new/changed key starts asc, asc flips to desc, desc
-// turns the sort off (null = back to entry order).
-function nextSortDir<K>(current: SortState<K> | undefined, key: K): "asc" | "desc" | null {
-  if (!current || current.key !== key) {
-    return "asc";
-  }
-  return current.dir === "asc" ? "desc" : null;
-}
-
-function compareExpenses(a: Expense, b: Expense, key: ExpenseSortKey, dir: "asc" | "desc", policyName: Map<string, string>): number {
-  const factor = dir === "asc" ? 1 : -1;
-  if (key === "amount") {
-    return (a.amount - b.amount) * factor;
-  }
-  const av = key === "name" ? a.name || "" : (policyName.get(a.policyId) ?? "");
-  const bv = key === "name" ? b.name || "" : (policyName.get(b.policyId) ?? "");
-  return av.localeCompare(bv) * factor;
-}
-
-function compareUnits(a: Unit, b: Unit, key: UnitSortKey, dir: "asc" | "desc"): number {
-  const factor = dir === "asc" ? 1 : -1;
-  if (key === "ci") {
-    return (a.commonInterest - b.commonInterest) * factor;
-  }
-  return a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" }) * factor;
-}
-
-function compareOwners(a: Owner, b: Owner, key: OwnerSortKey, dir: "asc" | "desc"): number {
-  const factor = dir === "asc" ? 1 : -1;
-  if (key === "currentMonthly") {
-    return (a.currentMonthly - b.currentMonthly) * factor;
-  }
-  return a.name.localeCompare(b.name) * factor;
-}
-
-function compareUnitTypes(a: UnitType, b: UnitType, key: UnitTypeSortKey, dir: "asc" | "desc"): number {
-  const factor = dir === "asc" ? 1 : -1;
-  if (key === "classification") {
-    return a.classification.localeCompare(b.classification) * factor;
-  }
-  return a.name.localeCompare(b.name) * factor;
-}
-
-// Reorder by the saved order (preserving cascade), then sort by `compare`, returning the new id order.
-function deriveOrder<T>(items: T[], prevOrder: string[], idOf: (item: T) => string, compare: (a: T, b: T) => number): string[] {
-  const ordered = applyOrder(items, prevOrder, idOf);
-  ordered.sort(compare);
-  return ordered.map(idOf);
-}
-
-type SortParam = {
-  owner: SortState<OwnerSortKey> | null;
-  unit: SortState<UnitSortKey> | null;
-  unitType: SortState<UnitTypeSortKey> | null;
-  expenses: Record<string, SortState<ExpenseSortKey>>;
-};
-
-// Sort state survives a refresh via the `s` URL param. Only the active key/dir per group is stored;
-// the display order is re-derived on load (a single stored sort reproduces its order exactly).
-// Token forms: `o:<key>:<dir>`, `u:<key>:<dir>`, `ut:<key>:<dir>`, `e:<encodedCategory>:<key>:<dir>`,
-// joined by ",". encodeURIComponent escapes both ":" and "," so categories never collide with the delimiters.
-function serializeSortParam(
-  owner: SortState<OwnerSortKey> | null,
-  unit: SortState<UnitSortKey> | null,
-  unitType: SortState<UnitTypeSortKey> | null,
-  expenses: Record<string, SortState<ExpenseSortKey>>,
-): string {
-  const tokens: string[] = [];
-  if (owner) {
-    tokens.push(`o:${owner.key}:${owner.dir}`);
-  }
-  if (unit) {
-    tokens.push(`u:${unit.key}:${unit.dir}`);
-  }
-  if (unitType) {
-    tokens.push(`ut:${unitType.key}:${unitType.dir}`);
-  }
-  for (const [category, sort] of Object.entries(expenses)) {
-    tokens.push(`e:${encodeURIComponent(category)}:${sort.key}:${sort.dir}`);
-  }
-  return tokens.join(",");
-}
-
-function parseSortParam(raw: string): SortParam {
-  const result: SortParam = { owner: null, unit: null, unitType: null, expenses: {} };
-  for (const token of raw.split(",").filter(Boolean)) {
-    const parts = token.split(":");
-    if (parts[0] === "o" && parts.length === 3) {
-      const [, key, dir] = parts;
-      if ((key === "name" || key === "currentMonthly") && (dir === "asc" || dir === "desc")) {
-        result.owner = { key, dir };
-      }
-    } else if (parts[0] === "u" && parts.length === 3) {
-      const [, key, dir] = parts;
-      if ((key === "label" || key === "ci") && (dir === "asc" || dir === "desc")) {
-        result.unit = { key, dir };
-      }
-    } else if (parts[0] === "ut" && parts.length === 3) {
-      const [, key, dir] = parts;
-      if ((key === "name" || key === "classification") && (dir === "asc" || dir === "desc")) {
-        result.unitType = { key, dir };
-      }
-    } else if (parts[0] === "e" && parts.length === 4) {
-      const [, category, key, dir] = parts;
-      if ((key === "name" || key === "amount" || key === "split") && (dir === "asc" || dir === "desc")) {
-        result.expenses[decodeURIComponent(category)] = { key, dir };
-      }
-    }
-  }
-  return result;
-}
 
 const iconProps = {
   viewBox: "0 0 24 24",
@@ -678,9 +534,12 @@ function HomeContent() {
   // Order units within a type group by the saved display order.
   const sortUnits = (units: Unit[]): Unit[] => applyOrder(units, unitOrder, (unit) => unit.id);
 
+  const classByType = new Map(budget.unitTypes.map((type) => [type.name, type.classification]));
+  const unitPasses = (unit: Unit) => passesUnitFilter(unit, classByType, unitFilter, unitTypeFilter);
+  const typePasses = (type: UnitType) => passesTypeFilter(type, unitFilter, unitTypeFilter);
+
   const unitGroups: { key: string; label: string; classification: UnitClassification; units: Unit[] }[] = budget.unitTypes
-    .filter((type) => unitFilter === "all" || type.classification === unitFilter)
-    .filter((type) => unitTypeFilter.size === 0 || unitTypeFilter.has(type.name))
+    .filter(typePasses)
     .map((type) => ({
       key: type.name,
       label: type.name,
@@ -688,28 +547,8 @@ function HomeContent() {
       units: sortUnits(budget.units.filter((unit) => unit.type === type.name)),
     }));
 
-  const classByType = new Map(budget.unitTypes.map((type) => [type.name, type.classification]));
-  const passesUnitFilter = (unit: Unit): boolean => {
-    if (unitTypeFilter.size > 0 && !unitTypeFilter.has(unit.type)) {
-      return false;
-    }
-    if (unitFilter !== "all" && classByType.get(unit.type) !== unitFilter) {
-      return false;
-    }
-    return true;
-  };
-  const passesTypeFilter = (type: UnitType): boolean => {
-    if (unitFilter !== "all" && type.classification !== unitFilter) {
-      return false;
-    }
-    if (unitTypeFilter.size > 0 && !unitTypeFilter.has(type.name)) {
-      return false;
-    }
-    return true;
-  };
-
   const assignmentByTypeGroups: { key: string; label: string; classification: UnitClassification; units: Unit[] }[] = budget.unitTypes
-    .filter(passesTypeFilter)
+    .filter(typePasses)
     .map((type) => ({
       key: `a:t:${type.name}`,
       label: type.name,
@@ -720,14 +559,14 @@ function HomeContent() {
   const assignmentByOwnerGroups: { key: string; owner: Owner; units: Unit[]; primaryUnits: Unit[]; totalCi: number }[] = budget.owners.map(
     (owner) => {
       const ownerUnits = budget.units.filter((unit) => unit.ownerId === owner.id);
-      const visible = sortUnits(ownerUnits.filter(passesUnitFilter));
+      const visible = sortUnits(ownerUnits.filter(unitPasses));
       const primaryUnits = ownerUnits.filter((unit) => classByType.get(unit.type) === "primary");
       const totalCi = visible.reduce((sum, unit) => sum + unit.commonInterest, 0);
       return { key: `a:o:${owner.id}`, owner, units: visible, primaryUnits, totalCi };
     },
   );
 
-  const unassignedUnits = sortUnits(budget.units.filter((unit) => !unit.ownerId && passesUnitFilter(unit)));
+  const unassignedUnits = sortUnits(budget.units.filter((unit) => !unit.ownerId && unitPasses(unit)));
 
   const assignmentGroupKeys =
     assignmentView === "type" ? assignmentByTypeGroups.map((group) => group.key) : assignmentByOwnerGroups.map((group) => group.key);
