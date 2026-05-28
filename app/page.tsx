@@ -1613,6 +1613,7 @@ function HomeContent() {
                               <CategoryName category={category} onRename={renameCategory} />
                             </div>
                             <div className="flex items-center gap-2">
+                              {items.length > 1 ? <span className={groupHeading}>Sort by</span> : null}
                               {items.length > 1 ? (
                                 <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
                                   {(["name", "amount", "split"] as ExpenseSortKey[]).map((key) => {
