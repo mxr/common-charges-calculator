@@ -13,7 +13,7 @@ repos:
   - id: pretty-format-yaml
     args: [--autofix, --line-width=120]
 - repo: https://github.com/biomejs/pre-commit
-  rev: 5e71eb16415bb412e2e88eeea7348d6f9c780d25  # frozen: v2.4.15
+  rev: 301335ecade7a6a02a8af284bb2efe3347c1ce67  # frozen: v2.4.16
   hooks:
   - id: biome-check
 - repo: https://github.com/zizmorcore/zizmor-pre-commit
