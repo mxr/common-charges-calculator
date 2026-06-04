@@ -7,7 +7,6 @@
     "react-dom": "^19.2.6"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.15",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^24",
     "@types/react": "^19",
@@ -29,7 +28,6 @@
   "scripts": {
     "build": "next build --turbopack",
     "dev": "next dev --turbopack",
-    "lint": "biome check --write .",
     "start": "next start",
     "tag": "bash scripts/tag.sh",
     "test": "vitest run",
