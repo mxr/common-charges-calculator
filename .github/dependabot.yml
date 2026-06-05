@@ -3,7 +3,7 @@ updates:
 - package-ecosystem: npm
   directory: /
   schedule:
-    interval: weekly
+    interval: daily
   ignore:
   # Don't update this so it doesn't surpass the node engine version
   - dependency-name: '@types/node'
@@ -33,7 +33,7 @@ updates:
 - package-ecosystem: github-actions
   directory: /
   schedule:
-    interval: weekly
+    interval: daily
   groups:
     github-actions:
       patterns:
