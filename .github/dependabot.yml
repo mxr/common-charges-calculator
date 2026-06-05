@@ -15,9 +15,8 @@ updates:
       - next
       - react
       - react-dom
-    lint-and-types:
+    types:
       patterns:
-      - '@biomejs/biome'
       - typescript
       - '@types/*'
     test:
