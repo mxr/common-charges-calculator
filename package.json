@@ -11,7 +11,7 @@
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@vitest/coverage-v8": "^4.1.6",
+    "@vitest/coverage-v8": "^4.1.8",
     "tailwindcss": "^4",
     "typescript": "^6",
     "vercel": "54.6.1",
