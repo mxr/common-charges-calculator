@@ -83,7 +83,7 @@ function HomeContent() {
   const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<"setup" | "rules" | "output">("setup");
+  const [activeTab, setActiveTab] = useState<"setup" | "rules">("setup");
   const [assignmentView, setAssignmentView] = useState<"type" | "owner">("type");
   const [unitFilter, setUnitFilter] = useState<UnitFilter>("all");
   const [unitTypeFilter, setUnitTypeFilter] = useState<Set<string>>(new Set());
@@ -98,7 +98,8 @@ function HomeContent() {
   const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(
     () => new Set([...collapsedInit].filter((key) => key.startsWith("t:")).map((key) => decodeURIComponent(key.slice(2)))),
   );
-  const [showBreakdown, setShowBreakdown] = useState(true);
+  const [collapsedCharges, setCollapsedCharges] = useState<Set<string>>(new Set());
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const [budget, setBudget] = useState<Budget>(() => parseBudgetUrl(searchParams.get("b")) ?? DEFAULT_BUDGET);
   const sortInit = parseSortParam(searchParams.get("s") ?? "");
 
@@ -584,6 +585,18 @@ function HomeContent() {
       return next;
     });
 
+  const allChargesCollapsed = result.perOwner.length > 0 && result.perOwner.every((o) => collapsedCharges.has(o.ownerId));
+  const toggleAllCharges = () =>
+    setCollapsedCharges((prev) => {
+      const next = new Set(prev);
+      if (allChargesCollapsed) {
+        for (const o of result.perOwner) next.delete(o.ownerId);
+      } else {
+        for (const o of result.perOwner) next.add(o.ownerId);
+      }
+      return next;
+    });
+
   const expenseCategories = [...new Set([...budget.categories, ...budget.expenses.map((expense) => expense.category)])];
 
   const unitsByOwner = new Map<string, UnitCharge[]>();
@@ -593,6 +606,16 @@ function HomeContent() {
     unitsByOwner.set(charge.ownerId, list);
   }
   const expenseName = new Map(budget.expenses.map((expense) => [expense.id, expense.name || "(unnamed)"]));
+
+  const sortedPerOwner = [...result.perOwner].sort((a, b) => {
+    const unitLabel = (ownerId: string, classification: "primary" | "ancillary") => {
+      const unit = budget.units.find((u) => u.ownerId === ownerId && classByType.get(u.type) === classification);
+      return unit?.label ?? null;
+    };
+    const aLabel = unitLabel(a.ownerId, "primary") ?? unitLabel(a.ownerId, "ancillary") ?? "￿";
+    const bLabel = unitLabel(b.ownerId, "primary") ?? unitLabel(b.ownerId, "ancillary") ?? "￿";
+    return aLabel.localeCompare(bLabel, undefined, { numeric: true });
+  });
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#f7f1e8]">
@@ -639,8 +662,7 @@ function HomeContent() {
           {(
             [
               ["setup", "Owners & units"],
-              ["rules", "Rules & expenses"],
-              ["output", "Charges"],
+              ["rules", "Calculator"],
             ] as const
           ).map(([key, label]) => (
             <button
@@ -1851,166 +1873,197 @@ function HomeContent() {
           </>
         ) : null}
 
-        {activeTab === "output" ? (
+        {activeTab === "rules" ? (
           <>
             {/* Charges per owner */}
             <section className={card}>
-              <h2 className={sectionTitle}>Charges per owner</h2>
-              <div className="flex items-start justify-between gap-3">
-                <p className={sectionHint}>
-                  Total {formatCurrency(result.totals.total)}/yr (base {formatCurrency(result.totals.base)}
-                  {budget.adjustments.inflationPct !== 0 ? ` incl. ${budget.adjustments.inflationPct}% inflation` : ""}
-                  {Math.abs(result.totals.offset) > 0.01
-                    ? ` ${result.totals.offset < 0 ? "-" : "+"} offsets ${formatCurrency(Math.abs(result.totals.offset))}`
-                    : ""}
-                  {Math.abs(result.totals.income) > 0.01
-                    ? ` ${result.totals.income < 0 ? "-" : "+"} other income ${formatCurrency(Math.abs(result.totals.income))}`
-                    : ""}
-                  {result.totals.reserve > 0.01 ? ` + reserve ${formatCurrency(result.totals.reserve)}` : ""}).{" "}
-                  {result.unallocated > 0.01 ? (
-                    <span className="font-semibold text-[#b44b43]">{formatCurrency(result.unallocated)} unallocated.</span>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className={sectionTitle}>Charges per owner</h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  {result.perOwner.length > 0 ? (
+                    <button type="button" className={pillButton} onClick={toggleAllCharges}>
+                      {allChargesCollapsed ? "Expand all" : "Collapse all"}
+                    </button>
                   ) : null}
-                </p>
-                <button
-                  type="button"
-                  className={`${iconButton} ${showBreakdown ? "bg-[#1b1a17] text-white" : ""}`}
-                  aria-label={showBreakdown ? "Hide breakdown" : "Show breakdown"}
-                  title={showBreakdown ? "Hide breakdown" : "Show breakdown"}
-                  onClick={() => setShowBreakdown((value) => !value)}
-                >
-                  <SearchIcon />
-                </button>
+                  <button
+                    type="button"
+                    className={`${iconButton} ${showBreakdown ? "bg-[#1b1a17] text-white" : ""}`}
+                    aria-label={showBreakdown ? "Hide breakdown" : "Show breakdown"}
+                    title={showBreakdown ? "Hide breakdown" : "Show breakdown"}
+                    onClick={() => setShowBreakdown((value) => !value)}
+                  >
+                    <SearchIcon />
+                  </button>
+                </div>
               </div>
+              <p className={`${sectionHint} mt-1`}>
+                Total {formatCurrency(result.totals.total)}/yr (base {formatCurrency(result.totals.base)}
+                {budget.adjustments.inflationPct !== 0 ? ` incl. ${budget.adjustments.inflationPct}% inflation` : ""}
+                {Math.abs(result.totals.offset) > 0.01
+                  ? ` ${result.totals.offset < 0 ? "-" : "+"} offsets ${formatCurrency(Math.abs(result.totals.offset))}`
+                  : ""}
+                {Math.abs(result.totals.income) > 0.01
+                  ? ` ${result.totals.income < 0 ? "-" : "+"} other income ${formatCurrency(Math.abs(result.totals.income))}`
+                  : ""}
+                {result.totals.reserve > 0.01 ? ` + reserve ${formatCurrency(result.totals.reserve)}` : ""}).{" "}
+                {result.unallocated > 0.01 ? (
+                  <span className="font-semibold text-[#b44b43]">{formatCurrency(result.unallocated)} unallocated.</span>
+                ) : null}
+              </p>
               <div className="mt-4 flex flex-col gap-4">
-                {result.perOwner.map((owner) => (
-                  <div key={owner.ownerId} className="rounded-2xl border border-[#f2e8dd] bg-[#fffaf3] p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className={`font-semibold ${owner.excluded ? "text-[#a89a8b]" : "text-[#181716]"}`}>
-                        {owner.name}
-                        {owner.excluded ? <span className="ml-2 text-xs italic">excluded</span> : null}
-                      </span>
-                      <span className={`font-semibold ${owner.excluded ? "text-[#a89a8b]" : "text-[#181716]"}`}>
-                        {formatCurrency(owner.monthly)}/mo
-                      </span>
-                    </div>
-                    {owner.excluded
-                      ? null
-                      : (() => {
-                          const delta = owner.monthly - owner.currentMonthly;
-                          const up = delta >= 0;
-                          const color = Math.abs(delta) < 0.01 ? "text-[#5b5148]" : up ? "text-[#b44b43]" : "text-[#3f7a52]";
-                          return (
-                            <div className="mt-1 text-sm text-[#5b5148]">
-                              current {formatCurrency(owner.currentMonthly)}/mo &rarr; new {formatCurrency(owner.monthly)}/mo{" "}
-                              <span className={`font-semibold ${color}`}>
-                                ({up ? "+" : "-"}
-                                {formatCurrency(Math.abs(delta))}/mo
-                                {owner.currentMonthly > 0
-                                  ? `, ${up ? "+" : "-"}${Math.abs((delta / owner.currentMonthly) * 100).toFixed(1)}%`
-                                  : ""}
-                                )
-                              </span>
-                            </div>
-                          );
-                        })()}
-                    <div className={`mt-3 grid gap-4 ${showBreakdown ? "md:grid-cols-2" : ""}`}>
-                      <div className="flex flex-col gap-1">
-                        <p className={groupHeading}>Per unit</p>
-                        {(unitsByOwner.get(owner.ownerId) ?? []).map((unit) => (
-                          <div key={unit.unitId} className="flex items-center justify-between text-sm text-[#4a4037]">
-                            <span>
-                              {unit.label} <span className="text-xs text-[#9a8a7b]">({unit.type})</span>
-                            </span>
-                            <span>{formatCurrency(unit.monthly)}/mo</span>
-                          </div>
-                        ))}
+                {sortedPerOwner.map((owner) => {
+                  const chargesCollapsed = collapsedCharges.has(owner.ownerId);
+                  return (
+                    <div key={owner.ownerId} className="rounded-2xl border border-[#f2e8dd] bg-[#fffaf3] p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <button
+                          type="button"
+                          className="flex items-center gap-2"
+                          onClick={() =>
+                            setCollapsedCharges((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(owner.ownerId)) {
+                                next.delete(owner.ownerId);
+                              } else {
+                                next.add(owner.ownerId);
+                              }
+                              return next;
+                            })
+                          }
+                        >
+                          <span className="text-lg leading-none text-[#8c7b6c]">{chargesCollapsed ? "▸" : "▾"}</span>
+                          <span className={`font-semibold ${owner.excluded ? "text-[#a89a8b]" : "text-[#181716]"}`}>
+                            {owner.name}
+                            {owner.excluded ? <span className="ml-2 text-xs italic">excluded</span> : null}
+                          </span>
+                        </button>
+                        <span className={`font-semibold ${owner.excluded ? "text-[#a89a8b]" : "text-[#181716]"}`}>
+                          {formatCurrency(owner.monthly)}/mo
+                        </span>
                       </div>
-                      {showBreakdown ? (
-                        <div className="flex flex-col gap-2">
-                          <p className={groupHeading}>Breakdown ($/mo)</p>
-                          {(() => {
-                            const units = unitsByOwner.get(owner.ownerId) ?? [];
-                            if (units.length === 0) {
-                              return <p className="text-sm italic text-[#9a8a7b]">No units.</p>;
-                            }
-                            const rows = budget.expenses.filter((expense) =>
-                              units.some((u) => Math.abs(u.byExpense[expense.id] ?? 0) > 0.005),
-                            );
-                            const showOffset = units.some((u) => Math.abs(u.offset) > 0.005);
-                            const showIncome = units.some((u) => Math.abs(u.income) > 0.005);
-                            const showReserve = units.some((u) => Math.abs(u.reserve) > 0.005);
-                            return (
-                              <div className="overflow-x-auto">
-                                <table className="w-full border-collapse text-xs">
-                                  <thead>
-                                    <tr className="text-left text-[#8c7b6c]">
-                                      <th className="py-1 pr-3 font-semibold" />
-                                      {units.map((u) => (
-                                        <th key={u.unitId} className="py-1 pl-3 text-right font-semibold">
-                                          {u.label}
-                                        </th>
-                                      ))}
-                                    </tr>
-                                  </thead>
-                                  <tbody className="text-[#4a4037]">
-                                    {rows.map((expense) => (
-                                      <tr key={expense.id} className="border-t border-[#f2e8dd]">
-                                        <td className="py-1 pr-3">{expenseName.get(expense.id)}</td>
-                                        {units.map((u) => (
-                                          <td key={u.unitId} className="py-1 pl-3 text-right">
-                                            {formatCurrency((u.byExpense[expense.id] ?? 0) / 12)}
-                                          </td>
-                                        ))}
-                                      </tr>
-                                    ))}
-                                    {showOffset ? (
-                                      <tr className="border-t border-[#f2e8dd]">
-                                        <td className="py-1 pr-3">Offset</td>
-                                        {units.map((u) => (
-                                          <td key={u.unitId} className="py-1 pl-3 text-right">
-                                            {formatCurrency(u.offset / 12)}
-                                          </td>
-                                        ))}
-                                      </tr>
-                                    ) : null}
-                                    {showIncome ? (
-                                      <tr className="border-t border-[#f2e8dd]">
-                                        <td className="py-1 pr-3">Income</td>
-                                        {units.map((u) => (
-                                          <td key={u.unitId} className="py-1 pl-3 text-right">
-                                            {formatCurrency(u.income / 12)}
-                                          </td>
-                                        ))}
-                                      </tr>
-                                    ) : null}
-                                    {showReserve ? (
-                                      <tr className="border-t border-[#f2e8dd]">
-                                        <td className="py-1 pr-3">Reserve</td>
-                                        {units.map((u) => (
-                                          <td key={u.unitId} className="py-1 pl-3 text-right">
-                                            {formatCurrency(u.reserve / 12)}
-                                          </td>
-                                        ))}
-                                      </tr>
-                                    ) : null}
-                                    <tr className="border-t border-[#eadccb] font-semibold text-[#181716]">
-                                      <td className="py-1 pr-3">Total</td>
-                                      {units.map((u) => (
-                                        <td key={u.unitId} className="py-1 pl-3 text-right">
-                                          {formatCurrency(u.monthly)}
-                                        </td>
-                                      ))}
-                                    </tr>
-                                  </tbody>
-                                </table>
+                      {chargesCollapsed ? null : (
+                        <>
+                          {owner.excluded
+                            ? null
+                            : (() => {
+                                const delta = owner.monthly - owner.currentMonthly;
+                                const up = delta >= 0;
+                                const color = Math.abs(delta) < 0.01 ? "text-[#5b5148]" : up ? "text-[#b44b43]" : "text-[#3f7a52]";
+                                return (
+                                  <div className="mt-1 text-sm text-[#5b5148]">
+                                    current {formatCurrency(owner.currentMonthly)}/mo &rarr; new {formatCurrency(owner.monthly)}/mo{" "}
+                                    <span className={`font-semibold ${color}`}>
+                                      ({up ? "+" : "-"}
+                                      {formatCurrency(Math.abs(delta))}/mo
+                                      {owner.currentMonthly > 0
+                                        ? `, ${up ? "+" : "-"}${Math.abs((delta / owner.currentMonthly) * 100).toFixed(1)}%`
+                                        : ""}
+                                      )
+                                    </span>
+                                  </div>
+                                );
+                              })()}
+                          <div className={`mt-3 grid gap-4 ${showBreakdown ? "md:grid-cols-2" : ""}`}>
+                            <div className="flex flex-col gap-1">
+                              <p className={groupHeading}>Per unit</p>
+                              {(unitsByOwner.get(owner.ownerId) ?? []).map((unit) => (
+                                <div key={unit.unitId} className="flex items-center justify-between text-sm text-[#4a4037]">
+                                  <span>
+                                    {unit.label} <span className="text-xs text-[#9a8a7b]">({unit.type})</span>
+                                  </span>
+                                  <span>{formatCurrency(unit.monthly)}/mo</span>
+                                </div>
+                              ))}
+                            </div>
+                            {showBreakdown ? (
+                              <div className="flex flex-col gap-2">
+                                <p className={groupHeading}>Breakdown ($/mo)</p>
+                                {(() => {
+                                  const units = unitsByOwner.get(owner.ownerId) ?? [];
+                                  if (units.length === 0) {
+                                    return <p className="text-sm italic text-[#9a8a7b]">No units.</p>;
+                                  }
+                                  const rows = budget.expenses.filter((expense) =>
+                                    units.some((u) => Math.abs(u.byExpense[expense.id] ?? 0) > 0.005),
+                                  );
+                                  const showOffset = units.some((u) => Math.abs(u.offset) > 0.005);
+                                  const showIncome = units.some((u) => Math.abs(u.income) > 0.005);
+                                  const showReserve = units.some((u) => Math.abs(u.reserve) > 0.005);
+                                  return (
+                                    <div className="overflow-x-auto">
+                                      <table className="w-full border-collapse text-xs">
+                                        <thead>
+                                          <tr className="text-left text-[#8c7b6c]">
+                                            <th className="py-1 pr-3 font-semibold" />
+                                            {units.map((u) => (
+                                              <th key={u.unitId} className="py-1 pl-3 text-right font-semibold">
+                                                {u.label}
+                                              </th>
+                                            ))}
+                                          </tr>
+                                        </thead>
+                                        <tbody className="text-[#4a4037]">
+                                          {rows.map((expense) => (
+                                            <tr key={expense.id} className="border-t border-[#f2e8dd]">
+                                              <td className="py-1 pr-3">{expenseName.get(expense.id)}</td>
+                                              {units.map((u) => (
+                                                <td key={u.unitId} className="py-1 pl-3 text-right">
+                                                  {formatCurrency((u.byExpense[expense.id] ?? 0) / 12)}
+                                                </td>
+                                              ))}
+                                            </tr>
+                                          ))}
+                                          {showOffset ? (
+                                            <tr className="border-t border-[#f2e8dd]">
+                                              <td className="py-1 pr-3">Offset</td>
+                                              {units.map((u) => (
+                                                <td key={u.unitId} className="py-1 pl-3 text-right">
+                                                  {formatCurrency(u.offset / 12)}
+                                                </td>
+                                              ))}
+                                            </tr>
+                                          ) : null}
+                                          {showIncome ? (
+                                            <tr className="border-t border-[#f2e8dd]">
+                                              <td className="py-1 pr-3">Income</td>
+                                              {units.map((u) => (
+                                                <td key={u.unitId} className="py-1 pl-3 text-right">
+                                                  {formatCurrency(u.income / 12)}
+                                                </td>
+                                              ))}
+                                            </tr>
+                                          ) : null}
+                                          {showReserve ? (
+                                            <tr className="border-t border-[#f2e8dd]">
+                                              <td className="py-1 pr-3">Reserve</td>
+                                              {units.map((u) => (
+                                                <td key={u.unitId} className="py-1 pl-3 text-right">
+                                                  {formatCurrency(u.reserve / 12)}
+                                                </td>
+                                              ))}
+                                            </tr>
+                                          ) : null}
+                                          <tr className="border-t border-[#eadccb] font-semibold text-[#181716]">
+                                            <td className="py-1 pr-3">Total</td>
+                                            {units.map((u) => (
+                                              <td key={u.unitId} className="py-1 pl-3 text-right">
+                                                {formatCurrency(u.monthly)}
+                                              </td>
+                                            ))}
+                                          </tr>
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  );
+                                })()}
                               </div>
-                            );
-                          })()}
-                        </div>
-                      ) : null}
+                            ) : null}
+                          </div>
+                        </>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           </>
