@@ -2,9 +2,9 @@
   "//": "tar override: @vercel/fun pins deprecated tar@7.5.7. Drop once vercel/fun#135 ships. https://github.com/vercel/fun/pull/135",
   "dependencies": {
     "lz-string": "^1.5.0",
-    "next": "^16.2.6",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "next": "^16.2.7",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
