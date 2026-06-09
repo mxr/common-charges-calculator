@@ -1396,7 +1396,10 @@ function HomeContent() {
                               }
                             }
                           }}
-                          onDrop={() => setDragPolicy(null)}
+                          onDrop={(event) => {
+                            event.preventDefault();
+                            setDragPolicy(null);
+                          }}
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
@@ -1629,7 +1632,10 @@ function HomeContent() {
                               }
                             }
                           }}
-                          onDrop={() => setDragCategory(null)}
+                          onDrop={(event) => {
+                            event.preventDefault();
+                            setDragCategory(null);
+                          }}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
