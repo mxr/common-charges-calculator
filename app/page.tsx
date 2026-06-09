@@ -404,13 +404,6 @@ function HomeContent() {
       return next;
     });
 
-  // Move `item` to sit just before `target` within an array, returning a new array.
-  const moveBefore = <T,>(arr: T[], item: T, target: T): T[] => {
-    const next = arr.filter((value) => value !== item);
-    next.splice(next.indexOf(target), 0, item);
-    return next;
-  };
-
   // Reorder by id: move the item with `fromId` to sit just before (or after, when `after`) `toId`.
   // Single pass collects the moved item and the target's landing index, then one splice inserts it.
   const moveItem = <T extends { id: string }>(arr: T[], fromId: string, toId: string, after: boolean): T[] => {
@@ -446,11 +439,16 @@ function HomeContent() {
     return event.clientY > rect.top + rect.height / 2;
   };
 
-  const moveCategory = (from: string, to: string) => {
+  const moveCategory = (from: string, to: string, after: boolean) => {
     if (from === to) {
       return;
     }
-    patch((draft) => ({ ...draft, categories: moveBefore(draft.categories, from, to) }));
+    patch((draft) => {
+      const next = draft.categories.filter((c) => c !== from);
+      const idx = next.indexOf(to);
+      next.splice(after ? idx + 1 : idx, 0, from);
+      return { ...draft, categories: next };
+    });
   };
 
   // Rename a category and carry the new name onto every expense that used it.
@@ -1586,7 +1584,7 @@ function HomeContent() {
                             if (dragCategory) {
                               event.preventDefault();
                               if (dragCategory !== category) {
-                                moveCategory(dragCategory, category);
+                                moveCategory(dragCategory, category, isAfterMidpoint(event));
                               }
                             }
                           }}
@@ -1649,70 +1647,75 @@ function HomeContent() {
                               </button>
                             </div>
                           </div>
-                          {items.map((expense, expenseIndex) => (
-                            <div
-                              key={expense.id}
-                              className="grid gap-2 transition-opacity sm:grid-cols-[1.4fr_1fr_1.6fr_auto] sm:items-center"
-                            >
-                              <TextField
-                                id={`expense-name-${expense.id}`}
-                                className={field}
-                                value={expense.name}
-                                placeholder="New expense"
-                                onChange={(next) =>
-                                  patch((draft) => ({
-                                    ...draft,
-                                    expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, name: next } : e)),
-                                  }))
-                                }
-                              />
-                              <CurrencyField
-                                className={field}
-                                value={expense.amount}
-                                onChange={(next) =>
-                                  patch((draft) => ({
-                                    ...draft,
-                                    expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, amount: next } : e)),
-                                  }))
-                                }
-                              />
-                              <select
-                                className={field}
-                                value={expense.policyId}
-                                onChange={(event) =>
-                                  patch((draft) => ({
-                                    ...draft,
-                                    expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, policyId: event.target.value } : e)),
-                                  }))
-                                }
-                                onKeyDown={(event) => {
-                                  if (event.key === "Tab" && !event.shiftKey && expenseIndex === items.length - 1) {
-                                    event.preventDefault();
-                                    addExpenseAndFocus(category);
+                          {!dragCategory &&
+                            items.map((expense, expenseIndex) => (
+                              <div
+                                key={expense.id}
+                                className="grid gap-2 transition-opacity sm:grid-cols-[1.4fr_1fr_1.6fr_auto] sm:items-center"
+                              >
+                                <TextField
+                                  id={`expense-name-${expense.id}`}
+                                  className={field}
+                                  value={expense.name}
+                                  placeholder="New expense"
+                                  onChange={(next) =>
+                                    patch((draft) => ({
+                                      ...draft,
+                                      expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, name: next } : e)),
+                                    }))
                                   }
-                                }}
-                              >
-                                {budget.policies.map((policy) => (
-                                  <option key={policy.id} value={policy.id}>
-                                    {policy.name}
-                                  </option>
-                                ))}
-                              </select>
-                              <button
-                                type="button"
-                                className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                                aria-label="Remove expense"
-                                onClick={() =>
-                                  patch((draft) => ({ ...draft, expenses: draft.expenses.filter((e) => e.id !== expense.id) }))
-                                }
-                              >
-                                <TrashIcon />
-                              </button>
-                            </div>
-                          ))}
-                          <button type="button" className={`${pillButton} self-start`} onClick={() => addExpenseAndFocus(category)}>
-                            Add expense
-                          </button>
+                                />
+                                <CurrencyField
+                                  className={field}
+                                  value={expense.amount}
+                                  onChange={(next) =>
+                                    patch((draft) => ({
+                                      ...draft,
+                                      expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, amount: next } : e)),
+                                    }))
+                                  }
+                                />
+                                <select
+                                  className={field}
+                                  value={expense.policyId}
+                                  onChange={(event) =>
+                                    patch((draft) => ({
+                                      ...draft,
+                                      expenses: draft.expenses.map((e) =>
+                                        e.id === expense.id ? { ...e, policyId: event.target.value } : e,
+                                      ),
+                                    }))
+                                  }
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Tab" && !event.shiftKey && expenseIndex === items.length - 1) {
+                                      event.preventDefault();
+                                      addExpenseAndFocus(category);
+                                    }
+                                  }}
+                                >
+                                  {budget.policies.map((policy) => (
+                                    <option key={policy.id} value={policy.id}>
+                                      {policy.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                  aria-label="Remove expense"
+                                  onClick={() =>
+                                    patch((draft) => ({ ...draft, expenses: draft.expenses.filter((e) => e.id !== expense.id) }))
+                                  }
+                                >
+                                  <TrashIcon />
+                                </button>
+                              </div>
+                            ))}
+                          {!dragCategory && (
+                            <button type="button" className={`${pillButton} self-start`} onClick={() => addExpenseAndFocus(category)}>
+                              Add expense
+                            </button>
+                          )}
                         </div>
                       );
                     })}
