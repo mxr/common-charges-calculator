@@ -598,6 +598,18 @@ function HomeContent() {
     });
 
   const expenseCategories = [...new Set([...budget.categories, ...budget.expenses.map((expense) => expense.category)])];
+  const catKey = (cat: string) => `e:${cat}`;
+  const allCategoriesCollapsed = expenseCategories.length > 0 && expenseCategories.every((cat) => collapsedTypes.has(catKey(cat)));
+  const toggleAllCategories = () =>
+    setCollapsedTypes((prev) => {
+      const next = new Set(prev);
+      if (allCategoriesCollapsed) {
+        for (const cat of expenseCategories) next.delete(catKey(cat));
+      } else {
+        for (const cat of expenseCategories) next.add(catKey(cat));
+      }
+      return next;
+    });
 
   const unitsByOwner = new Map<string, UnitCharge[]>();
   for (const charge of result.perUnit) {
@@ -1581,6 +1593,11 @@ function HomeContent() {
                   Expenses
                   <span className="text-sm font-normal text-[#9a8a7b]">({budget.expenses.length})</span>
                 </button>
+                {!collapsedExpenses && expenseCategories.length > 0 ? (
+                  <button type="button" className={pillButton} onClick={toggleAllCategories}>
+                    {allCategoriesCollapsed ? "Expand all" : "Collapse all"}
+                  </button>
+                ) : null}
               </div>
               {collapsedExpenses ? null : (
                 <>
@@ -1596,6 +1613,8 @@ function HomeContent() {
                         expenseOrder[category] ?? [],
                         (expense) => expense.id,
                       );
+                      const catCollapsed = collapsedTypes.has(catKey(category));
+                      const categoryTotal = items.reduce((sum, e) => sum + e.amount, 0);
                       return (
                         // biome-ignore lint/a11y/noStaticElementInteractions: native drag-and-drop reorder target
                         <div
@@ -1630,11 +1649,24 @@ function HomeContent() {
                               >
                                 ☰
                               </span>
+                              <button
+                                type="button"
+                                className="flex items-center"
+                                aria-label={catCollapsed ? `Expand ${category}` : `Collapse ${category}`}
+                                onClick={() => toggleType(catKey(category))}
+                              >
+                                <span className="text-lg leading-none text-[#8c7b6c]">{catCollapsed ? "▸" : "▾"}</span>
+                              </button>
                               <CategoryName category={category} onRename={renameCategory} />
+                              {catCollapsed && items.length > 0 ? (
+                                <span className="text-xs text-[#9a8a7b]">
+                                  {items.length} item{items.length !== 1 ? "s" : ""} &middot; {formatCurrency(categoryTotal)}/yr
+                                </span>
+                              ) : null}
                             </div>
                             <div className="flex items-center gap-2">
-                              {items.length > 1 ? <span className={groupHeading}>Sort by</span> : null}
-                              {items.length > 1 ? (
+                              {!catCollapsed && items.length > 1 ? <span className={groupHeading}>Sort by</span> : null}
+                              {!catCollapsed && items.length > 1 ? (
                                 <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
                                   {(["name", "amount", "split"] as ExpenseSortKey[]).map((key) => {
                                     const active = sort?.key === key;
@@ -1669,7 +1701,8 @@ function HomeContent() {
                               </button>
                             </div>
                           </div>
-                          {!dragCategory &&
+                          {!catCollapsed &&
+                            !dragCategory &&
                             items.map((expense, expenseIndex) => (
                               <div
                                 key={expense.id}
@@ -1733,7 +1766,7 @@ function HomeContent() {
                                 </button>
                               </div>
                             ))}
-                          {!dragCategory && (
+                          {!catCollapsed && !dragCategory && (
                             <button type="button" className={`${pillButton} self-start`} onClick={() => addExpenseAndFocus(category)}>
                               Add expense
                             </button>
