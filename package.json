@@ -14,7 +14,7 @@
     "@vitest/coverage-v8": "^4.1.8",
     "tailwindcss": "^4",
     "typescript": "^6",
-    "vercel": "54.9.1",
+    "vercel": "54.10.2",
     "vitest": "^4.1.1"
   },
   "engines": {
