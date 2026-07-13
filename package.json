@@ -2,7 +2,7 @@
   "//": "tar override: @vercel/fun pins deprecated tar@7.5.7. Drop once vercel/fun#135 ships. https://github.com/vercel/fun/pull/135",
   "dependencies": {
     "lz-string": "^1.5.0",
-    "next": "^16.2.9",
+    "next": "^16.2.10",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
@@ -11,10 +11,10 @@
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@vitest/coverage-v8": "^4.1.9",
+    "@vitest/coverage-v8": "^4.1.10",
     "tailwindcss": "^4",
     "typescript": "^6",
-    "vercel": "54.18.6",
+    "vercel": "54.20.1",
     "vitest": "^4.1.1"
   },
   "engines": {
