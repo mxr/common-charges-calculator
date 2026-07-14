@@ -1,5 +1,5 @@
 pull_request_rules:
-  # pre-commit ci won't automerge (see https://github.com/pre-commit-ci/issues/issues/48)
+# pre-commit ci won't automerge (see https://github.com/pre-commit-ci/issues/issues/48)
 - name: automatic merge for pre-commit ci updates
   conditions:
   - author=pre-commit-ci[bot]
@@ -8,9 +8,9 @@ pull_request_rules:
     merge:
       method: squash
 
-- name: automatic merge for dependabot updates
+- name: automatic merge for renovate updates
   conditions:
-  - author=dependabot[bot]
+  - author=renovate[bot]
   actions:
     merge:
       method: squash
