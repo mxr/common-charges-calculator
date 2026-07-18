@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.4/schema.json",
   "assist": {
     "actions": {
       "source": {
@@ -52,7 +52,7 @@
     },
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "style": {
         "useImportType": {
           "level": "on",
