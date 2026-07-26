@@ -2,32 +2,23 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "commitMessageAction": "weekly",
   "commitMessagePrefix": "[renovate]",
-  "extends": [
-    "config:recommended",
-    ":disableDependencyDashboard"
-  ],
+  "extends": ["config:recommended", ":disableDependencyDashboard"],
   "minimumReleaseAge": "7 days",
   "packageRules": [
     {
       "enabled": false,
-      "matchPackageNames": [
-        "tar"
-      ]
+      "matchPackageNames": ["tar"]
     },
     {
       "commitMessageExtra": " ",
       "commitMessageSuffix": " ",
       "commitMessageTopic": " ",
       "groupName": "update",
-      "matchPackageNames": [
-        "*"
-      ]
+      "matchPackageNames": ["*"]
     }
   ],
   "prBodyTemplate": "{{{table}}}",
-  "schedule": [
-    "before 6am on monday"
-  ],
+  "schedule": ["before 6am on monday"],
   "separateMajorMinor": false,
   "separateMultipleMajor": false
 }
