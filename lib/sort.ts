@@ -49,7 +49,9 @@ export function applyOrder<T>(items: T[], orderIds: string[], idOf: (item: T) =>
     return [...items];
   }
   const rank = new Map(orderIds.map((id, index) => [id, index]));
-  return [...items].sort((a, b) => (rank.get(idOf(a)) ?? Number.POSITIVE_INFINITY) - (rank.get(idOf(b)) ?? Number.POSITIVE_INFINITY));
+  return [...items].sort(
+    (a, b) => (rank.get(idOf(a)) ?? Number.POSITIVE_INFINITY) - (rank.get(idOf(b)) ?? Number.POSITIVE_INFINITY),
+  );
 }
 
 // Next direction when a sort key is clicked: a new/changed key starts asc, asc flips to desc, desc
@@ -61,7 +63,13 @@ export function nextSortDir<K>(current: SortState<K> | undefined, key: K): "asc"
   return current.dir === "asc" ? "desc" : null;
 }
 
-export function compareExpenses(a: Expense, b: Expense, key: ExpenseSortKey, dir: "asc" | "desc", policyName: Map<string, string>): number {
+export function compareExpenses(
+  a: Expense,
+  b: Expense,
+  key: ExpenseSortKey,
+  dir: "asc" | "desc",
+  policyName: Map<string, string>,
+): number {
   const factor = dir === "asc" ? 1 : -1;
   if (key === "amount") {
     return (a.amount - b.amount) * factor;
@@ -96,7 +104,12 @@ export function compareUnitTypes(a: UnitType, b: UnitType, key: UnitTypeSortKey,
 }
 
 // Reorder by the saved order (preserving cascade), then sort by `compare`, returning the new id order.
-export function deriveOrder<T>(items: T[], prevOrder: string[], idOf: (item: T) => string, compare: (a: T, b: T) => number): string[] {
+export function deriveOrder<T>(
+  items: T[],
+  prevOrder: string[],
+  idOf: (item: T) => string,
+  compare: (a: T, b: T) => number,
+): string[] {
   const ordered = applyOrder(items, prevOrder, idOf);
   ordered.sort(compare);
   return ordered.map(idOf);

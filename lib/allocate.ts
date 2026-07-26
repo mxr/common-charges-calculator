@@ -201,7 +201,14 @@ export const computeCharges = (budget: Budget): ChargeResult => {
     perUnit: [...charges.values()],
     perOwner,
     byCategory,
-    totals: { base: totalBase, offset: totalOffset, income: totalIncome, reserve: totalReserve, total, monthly: total / 12 },
+    totals: {
+      base: totalBase,
+      offset: totalOffset,
+      income: totalIncome,
+      reserve: totalReserve,
+      total,
+      monthly: total / 12,
+    },
     unallocated,
     warnings,
   };

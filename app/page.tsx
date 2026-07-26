@@ -26,12 +26,18 @@ import {
   UNIT_SORT_LABELS,
   UNIT_TYPE_SORT_LABELS,
 } from "../lib/sort";
-import { ALLOCATION_METHOD_LABELS, ALLOCATION_METHODS, UNIT_CLASSIFICATION_LABELS, UNIT_CLASSIFICATIONS } from "../lib/types";
+import {
+  ALLOCATION_METHOD_LABELS,
+  ALLOCATION_METHODS,
+  UNIT_CLASSIFICATION_LABELS,
+  UNIT_CLASSIFICATIONS,
+} from "../lib/types";
 import type { UnitCharge } from "../lib/allocate";
 import type { ExpenseSortKey, OwnerSortKey, SortState, UnitFilter, UnitSortKey, UnitTypeSortKey } from "../lib/sort";
 import type { Budget, Owner, Unit, UnitClassification, UnitType } from "../lib/types";
 
-const card = "rounded-3xl border border-[#e7d7c8] bg-white/80 p-6 shadow-[0_20px_60px_rgba(120,96,77,0.12)] backdrop-blur";
+const card =
+  "rounded-3xl border border-[#e7d7c8] bg-white/80 p-6 shadow-[0_20px_60px_rgba(120,96,77,0.12)] backdrop-blur";
 const sectionTitle = "text-2xl font-semibold text-[#181716]";
 const sectionHint = "text-sm text-[#5b5148]";
 const fieldBase =
@@ -76,7 +82,8 @@ const SearchIcon = () => (
   </svg>
 );
 
-const formatCi = (value: number) => value.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+const formatCi = (value: number) =>
+  value.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 
 function HomeContent() {
   const pathname = usePathname();
@@ -96,7 +103,8 @@ function HomeContent() {
   const [collapsedExpenses, setCollapsedExpenses] = useState(collapsedInit.has("expenses"));
   const [collapsedUnitTypes, setCollapsedUnitTypes] = useState(collapsedInit.has("unitTypes"));
   const [collapsedTypes, setCollapsedTypes] = useState<Set<string>>(
-    () => new Set([...collapsedInit].filter((key) => key.startsWith("t:")).map((key) => decodeURIComponent(key.slice(2)))),
+    () =>
+      new Set([...collapsedInit].filter((key) => key.startsWith("t:")).map((key) => decodeURIComponent(key.slice(2)))),
   );
   const [collapsedCharges, setCollapsedCharges] = useState<Set<string>>(new Set());
   const [showBreakdown, setShowBreakdown] = useState(false);
@@ -208,11 +216,16 @@ function HomeContent() {
       units: draft.units.map((unit) => (unit.type === from ? { ...unit, type: next } : unit)),
       policies: draft.policies.map((policy) => ({
         ...policy,
-        rules: policy.rules.map((rule) => ({ ...rule, unitTypes: rule.unitTypes.map((type) => (type === from ? next : type)) })),
+        rules: policy.rules.map((rule) => ({
+          ...rule,
+          unitTypes: rule.unitTypes.map((type) => (type === from ? next : type)),
+        })),
       })),
       adjustments: {
         ...draft.adjustments,
-        offsets: (draft.adjustments.offsets ?? []).map((offset) => (offset.unitType === from ? { ...offset, unitType: next } : offset)),
+        offsets: (draft.adjustments.offsets ?? []).map((offset) =>
+          offset.unitType === from ? { ...offset, unitType: next } : offset,
+        ),
       },
     }));
     setUnitTypeOrder((prev) => prev.map((name) => (name === from ? next : name)));
@@ -471,14 +484,20 @@ function HomeContent() {
           className={field}
           value={unit.label}
           onChange={(next) =>
-            patch((draft) => ({ ...draft, units: draft.units.map((u) => (u.id === unit.id ? { ...u, label: next } : u)) }))
+            patch((draft) => ({
+              ...draft,
+              units: draft.units.map((u) => (u.id === unit.id ? { ...u, label: next } : u)),
+            }))
           }
         />
         <select
           className={field}
           value={unit.type}
           onChange={(event) =>
-            patch((draft) => ({ ...draft, units: draft.units.map((u) => (u.id === unit.id ? { ...u, type: event.target.value } : u)) }))
+            patch((draft) => ({
+              ...draft,
+              units: draft.units.map((u) => (u.id === unit.id ? { ...u, type: event.target.value } : u)),
+            }))
           }
         >
           {budget.unitTypes.map((type) => (
@@ -516,7 +535,10 @@ function HomeContent() {
           className={`${field} max-w-xs flex-1`}
           value={unit.ownerId}
           onChange={(event) =>
-            patch((draft) => ({ ...draft, units: draft.units.map((u) => (u.id === unit.id ? { ...u, ownerId: event.target.value } : u)) }))
+            patch((draft) => ({
+              ...draft,
+              units: draft.units.map((u) => (u.id === unit.id ? { ...u, ownerId: event.target.value } : u)),
+            }))
           }
         >
           <option value="">— unassigned —</option>
@@ -537,39 +559,39 @@ function HomeContent() {
   const unitPasses = (unit: Unit) => passesUnitFilter(unit, classByType, unitFilter, unitTypeFilter);
   const typePasses = (type: UnitType) => passesTypeFilter(type, unitFilter, unitTypeFilter);
 
-  const unitGroups: { key: string; label: string; classification: UnitClassification; units: Unit[] }[] = budget.unitTypes
-    .filter(typePasses)
-    .map((type) => ({
+  const unitGroups: { key: string; label: string; classification: UnitClassification; units: Unit[] }[] =
+    budget.unitTypes.filter(typePasses).map((type) => ({
       key: type.name,
       label: type.name,
       classification: type.classification,
       units: sortUnits(budget.units.filter((unit) => unit.type === type.name)),
     }));
 
-  const assignmentByTypeGroups: { key: string; label: string; classification: UnitClassification; units: Unit[] }[] = budget.unitTypes
-    .filter(typePasses)
-    .map((type) => ({
+  const assignmentByTypeGroups: { key: string; label: string; classification: UnitClassification; units: Unit[] }[] =
+    budget.unitTypes.filter(typePasses).map((type) => ({
       key: `a:t:${type.name}`,
       label: type.name,
       classification: type.classification,
       units: sortUnits(budget.units.filter((unit) => unit.type === type.name)),
     }));
 
-  const assignmentByOwnerGroups: { key: string; owner: Owner; units: Unit[]; primaryUnits: Unit[]; totalCi: number }[] = budget.owners.map(
-    (owner) => {
+  const assignmentByOwnerGroups: { key: string; owner: Owner; units: Unit[]; primaryUnits: Unit[]; totalCi: number }[] =
+    budget.owners.map((owner) => {
       const ownerUnits = budget.units.filter((unit) => unit.ownerId === owner.id);
       const visible = sortUnits(ownerUnits.filter(unitPasses));
       const primaryUnits = ownerUnits.filter((unit) => classByType.get(unit.type) === "primary");
       const totalCi = visible.reduce((sum, unit) => sum + unit.commonInterest, 0);
       return { key: `a:o:${owner.id}`, owner, units: visible, primaryUnits, totalCi };
-    },
-  );
+    });
 
   const unassignedUnits = sortUnits(budget.units.filter((unit) => !unit.ownerId && unitPasses(unit)));
 
   const assignmentGroupKeys =
-    assignmentView === "type" ? assignmentByTypeGroups.map((group) => group.key) : assignmentByOwnerGroups.map((group) => group.key);
-  const allAssignmentsCollapsed = assignmentGroupKeys.length > 0 && assignmentGroupKeys.every((key) => collapsedTypes.has(key));
+    assignmentView === "type"
+      ? assignmentByTypeGroups.map((group) => group.key)
+      : assignmentByOwnerGroups.map((group) => group.key);
+  const allAssignmentsCollapsed =
+    assignmentGroupKeys.length > 0 && assignmentGroupKeys.every((key) => collapsedTypes.has(key));
   const toggleAllAssignments = () =>
     setCollapsedTypes((prev) => {
       const next = new Set(prev);
@@ -585,7 +607,8 @@ function HomeContent() {
       return next;
     });
 
-  const allChargesCollapsed = result.perOwner.length > 0 && result.perOwner.every((o) => collapsedCharges.has(o.ownerId));
+  const allChargesCollapsed =
+    result.perOwner.length > 0 && result.perOwner.every((o) => collapsedCharges.has(o.ownerId));
   const toggleAllCharges = () =>
     setCollapsedCharges((prev) => {
       const next = new Set(prev);
@@ -599,7 +622,8 @@ function HomeContent() {
 
   const expenseCategories = [...new Set([...budget.categories, ...budget.expenses.map((expense) => expense.category)])];
   const catKey = (cat: string) => `e:${cat}`;
-  const allCategoriesCollapsed = expenseCategories.length > 0 && expenseCategories.every((cat) => collapsedTypes.has(catKey(cat)));
+  const allCategoriesCollapsed =
+    expenseCategories.length > 0 && expenseCategories.every((cat) => collapsedTypes.has(catKey(cat)));
   const toggleAllCategories = () =>
     setCollapsedTypes((prev) => {
       const next = new Set(prev);
@@ -637,10 +661,13 @@ function HomeContent() {
       <main className="relative mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-16 sm:px-10 lg:px-12">
         <header className="flex flex-col gap-5">
           <div className="text-sm uppercase tracking-[0.3em] text-[#7b6a5b]">Common Charges Calculator</div>
-          <h1 className="text-4xl font-semibold tracking-tight text-[#161515] sm:text-5xl">Split building expenses fairly.</h1>
+          <h1 className="text-4xl font-semibold tracking-tight text-[#161515] sm:text-5xl">
+            Split building expenses fairly.
+          </h1>
           <p className="max-w-3xl text-base text-[#4a4037] sm:text-lg">
-            Define owners, units, expenses, and the policies that decide how each expense is split. Charges update instantly. Everything
-            runs locally in your browser and is stored in the URL, so you can bookmark or share a budget.
+            Define owners, units, expenses, and the policies that decide how each expense is split. Charges update
+            instantly. Everything runs locally in your browser and is stored in the URL, so you can bookmark or share a
+            budget.
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <button type="button" className={solidButton} onClick={handleCopyLink}>
@@ -655,7 +682,13 @@ function HomeContent() {
             <button type="button" className={pillButton} onClick={() => setBudget(structuredClone(DEFAULT_BUDGET))}>
               Reset to sample
             </button>
-            <input ref={fileInputRef} type="file" accept=".json,application/json" onChange={handleImport} className="hidden" />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json"
+              onChange={handleImport}
+              className="hidden"
+            />
           </div>
         </header>
 
@@ -735,7 +768,11 @@ function HomeContent() {
                   <button type="button" className={pillButton} onClick={() => setBatch("owner")}>
                     Batch add
                   </button>
-                  <button type="button" className={dangerButton} onClick={() => patch((draft) => ({ ...draft, owners: [] }))}>
+                  <button
+                    type="button"
+                    className={dangerButton}
+                    onClick={() => patch((draft) => ({ ...draft, owners: [] }))}
+                  >
                     Delete all
                   </button>
                 </div>
@@ -743,8 +780,8 @@ function HomeContent() {
               {collapsedOwners ? null : (
                 <>
                   <p className={`${sectionHint} mt-1`}>
-                    Add all owners here with 'Add owner', batch upload, or the Tab key. Mark an owner as 'excluded' and their Units don't
-                    pay common charges (example: if the condo board owns units).
+                    Add all owners here with 'Add owner', batch upload, or the Tab key. Mark an owner as 'excluded' and
+                    their Units don't pay common charges (example: if the condo board owns units).
                   </p>
                   <div className="mt-4 overflow-x-auto">
                     <table className="w-full border-collapse text-sm">
@@ -780,7 +817,9 @@ function HomeContent() {
                                   onChange={(next) =>
                                     patch((draft) => ({
                                       ...draft,
-                                      owners: draft.owners.map((o) => (o.id === owner.id ? { ...o, currentMonthly: next } : o)),
+                                      owners: draft.owners.map((o) =>
+                                        o.id === owner.id ? { ...o, currentMonthly: next } : o,
+                                      ),
                                     }))
                                   }
                                 />
@@ -806,7 +845,12 @@ function HomeContent() {
                                     type="button"
                                     className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
                                     aria-label="Remove owner"
-                                    onClick={() => patch((draft) => ({ ...draft, owners: draft.owners.filter((o) => o.id !== owner.id) }))}
+                                    onClick={() =>
+                                      patch((draft) => ({
+                                        ...draft,
+                                        owners: draft.owners.filter((o) => o.id !== owner.id),
+                                      }))
+                                    }
                                   >
                                     <TrashIcon />
                                   </button>
@@ -820,7 +864,9 @@ function HomeContent() {
                   </div>
                   <div className="mt-3 flex items-center justify-between border-t border-[#eadccb] pt-3 text-sm font-semibold text-[#181716]">
                     <span>Total income</span>
-                    <span>{formatCurrency(budget.owners.reduce((sum, owner) => sum + owner.currentMonthly * 12, 0))}/yr</span>
+                    <span>
+                      {formatCurrency(budget.owners.reduce((sum, owner) => sum + owner.currentMonthly * 12, 0))}/yr
+                    </span>
                   </div>
                 </>
               )}
@@ -867,7 +913,11 @@ function HomeContent() {
                   <button type="button" className={pillButton} onClick={() => setBatch("unitType")}>
                     Batch add
                   </button>
-                  <button type="button" className={dangerButton} onClick={() => patch((draft) => ({ ...draft, unitTypes: [] }))}>
+                  <button
+                    type="button"
+                    className={dangerButton}
+                    onClick={() => patch((draft) => ({ ...draft, unitTypes: [] }))}
+                  >
                     Delete all
                   </button>
                 </div>
@@ -875,8 +925,8 @@ function HomeContent() {
               {collapsedUnitTypes ? null : (
                 <>
                   <p className={`${sectionHint} mt-1`}>
-                    Unit types are referenced by units, policies, and offsets. Classification (Primary or Ancillary) is for bookkeeping only
-                    and does not affect charges yet.
+                    Unit types are referenced by units, policies, and offsets. Classification (Primary or Ancillary) is
+                    for bookkeeping only and does not affect charges yet.
                   </p>
                   <div className="mt-4 overflow-x-auto">
                     <table className="w-full border-collapse text-sm">
@@ -907,7 +957,9 @@ function HomeContent() {
                                   patch((draft) => ({
                                     ...draft,
                                     unitTypes: draft.unitTypes.map((t) =>
-                                      t.name === type.name ? { ...t, classification: event.target.value as UnitClassification } : t,
+                                      t.name === type.name
+                                        ? { ...t, classification: event.target.value as UnitClassification }
+                                        : t,
                                     ),
                                   }))
                                 }
@@ -926,7 +978,10 @@ function HomeContent() {
                                   className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
                                   aria-label="Remove unit type"
                                   onClick={() =>
-                                    patch((draft) => ({ ...draft, unitTypes: draft.unitTypes.filter((t) => t.name !== type.name) }))
+                                    patch((draft) => ({
+                                      ...draft,
+                                      unitTypes: draft.unitTypes.filter((t) => t.name !== type.name),
+                                    }))
                                   }
                                 >
                                   <TrashIcon />
@@ -937,7 +992,9 @@ function HomeContent() {
                         ))}
                       </tbody>
                     </table>
-                    {budget.unitTypes.length === 0 ? <p className="mt-3 text-sm italic text-[#9a8a7b]">No unit types.</p> : null}
+                    {budget.unitTypes.length === 0 ? (
+                      <p className="mt-3 text-sm italic text-[#9a8a7b]">No unit types.</p>
+                    ) : null}
                   </div>
                 </>
               )}
@@ -980,7 +1037,11 @@ function HomeContent() {
                   <button type="button" className={pillButton} onClick={() => setBatch("unit")}>
                     Batch add
                   </button>
-                  <button type="button" className={dangerButton} onClick={() => patch((draft) => ({ ...draft, units: [] }))}>
+                  <button
+                    type="button"
+                    className={dangerButton}
+                    onClick={() => patch((draft) => ({ ...draft, units: [] }))}
+                  >
                     Delete all
                   </button>
                 </div>
@@ -989,13 +1050,20 @@ function HomeContent() {
                 <>
                   <p className={`${sectionHint} mt-1`}>
                     Common interests total{" "}
-                    <span className={Math.abs(ciSum - 100) <= 0.01 ? "font-semibold text-[#3f7a52]" : "font-semibold text-[#b44b43]"}>
+                    <span
+                      className={
+                        Math.abs(ciSum - 100) <= 0.01 ? "font-semibold text-[#3f7a52]" : "font-semibold text-[#b44b43]"
+                      }
+                    >
                       {formatCi(ciSum)}%
                     </span>{" "}
-                    (should be as close to 100% as possible). Columns: label, type, common interest %. Grouped by unit type. Edit owner
-                    assignments in the Assignments section below.
+                    (should be as close to 100% as possible). Columns: label, type, common interest %. Grouped by unit
+                    type. Edit owner assignments in the Assignments section below.
                     {Math.abs(ciSum - 100) > 0.01 ? (
-                      <span className="font-semibold text-[#b44b43]"> Off from 100% - double-check the Unit definitions.</span>
+                      <span className="font-semibold text-[#b44b43]">
+                        {" "}
+                        Off from 100% - double-check the Unit definitions.
+                      </span>
                     ) : null}
                   </p>
                   <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3">
@@ -1080,7 +1148,11 @@ function HomeContent() {
                       return (
                         <div key={group.key} className="flex flex-col gap-2">
                           <div className="flex items-center justify-between">
-                            <button type="button" className="flex items-center gap-2" onClick={() => toggleType(group.key)}>
+                            <button
+                              type="button"
+                              className="flex items-center gap-2"
+                              onClick={() => toggleType(group.key)}
+                            >
                               <span className="text-lg leading-none text-[#8c7b6c]">{collapsed ? "▸" : "▾"}</span>
                               <span className={groupHeading}>{group.label || "—"}</span>
                             </button>
@@ -1130,7 +1202,9 @@ function HomeContent() {
               </div>
               {collapsedAssignments ? null : (
                 <>
-                  <p className={`${sectionHint} mt-1`}>Assign an owner to each unit. Change a unit's type in the Units section above.</p>
+                  <p className={`${sectionHint} mt-1`}>
+                    Assign an owner to each unit. Change a unit's type in the Units section above.
+                  </p>
                   <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3">
                     <div className="flex items-center gap-2">
                       <span className={groupHeading}>Grouping</span>
@@ -1232,7 +1306,11 @@ function HomeContent() {
                         return (
                           <div key={group.key} className="flex flex-col gap-2">
                             <div className="flex items-center justify-between">
-                              <button type="button" className="flex items-center gap-2" onClick={() => toggleType(group.key)}>
+                              <button
+                                type="button"
+                                className="flex items-center gap-2"
+                                onClick={() => toggleType(group.key)}
+                              >
                                 <span className="text-lg leading-none text-[#8c7b6c]">{collapsed ? "▸" : "▾"}</span>
                                 <span className={groupHeading}>{group.label || "—"}</span>
                               </button>
@@ -1266,7 +1344,11 @@ function HomeContent() {
                         return (
                           <div key={group.key} className="flex flex-col gap-2">
                             <div className="flex items-center justify-between">
-                              <button type="button" className="flex items-center gap-2" onClick={() => toggleType(group.key)}>
+                              <button
+                                type="button"
+                                className="flex items-center gap-2"
+                                onClick={() => toggleType(group.key)}
+                              >
                                 <span className="text-lg leading-none text-[#8c7b6c]">{collapsed ? "▸" : "▾"}</span>
                                 {group.primaryUnits.length > 0 ? (
                                   <span
@@ -1287,8 +1369,12 @@ function HomeContent() {
                                 ) : (
                                   group.units.map((unit) => (
                                     <div key={unit.id} className="flex items-center gap-3">
-                                      <span className="w-20 shrink-0 text-sm font-medium text-[#1d1b18]">{unit.label || "—"}</span>
-                                      <span className="w-24 shrink-0 text-sm text-[#5b5148]">{formatCi(unit.commonInterest)}%</span>
+                                      <span className="w-20 shrink-0 text-sm font-medium text-[#1d1b18]">
+                                        {unit.label || "—"}
+                                      </span>
+                                      <span className="w-24 shrink-0 text-sm text-[#5b5148]">
+                                        {formatCi(unit.commonInterest)}%
+                                      </span>
                                       <button
                                         type="button"
                                         aria-label={`Remove unit ${unit.label} from owner`}
@@ -1296,7 +1382,9 @@ function HomeContent() {
                                         onClick={() =>
                                           patch((draft) => ({
                                             ...draft,
-                                            units: draft.units.map((u) => (u.id === unit.id ? { ...u, ownerId: "" } : u)),
+                                            units: draft.units.map((u) =>
+                                              u.id === unit.id ? { ...u, ownerId: "" } : u,
+                                            ),
                                           }))
                                         }
                                       >
@@ -1318,7 +1406,9 @@ function HomeContent() {
                                         }
                                         patch((draft) => ({
                                           ...draft,
-                                          units: draft.units.map((u) => (u.id === id ? { ...u, ownerId: group.owner.id } : u)),
+                                          units: draft.units.map((u) =>
+                                            u.id === id ? { ...u, ownerId: group.owner.id } : u,
+                                          ),
                                         }));
                                       }}
                                     >
@@ -1366,7 +1456,11 @@ function HomeContent() {
                       ...draft,
                       policies: [
                         ...draft.policies,
-                        { id: makeId("policy"), name: "New policy", rules: [{ unitTypes: [], weight: 100, method: "common_interest" }] },
+                        {
+                          id: makeId("policy"),
+                          name: "New policy",
+                          rules: [{ unitTypes: [], weight: 100, method: "common_interest" }],
+                        },
                       ],
                     }))
                   }
@@ -1425,7 +1519,9 @@ function HomeContent() {
                                 onChange={(next) =>
                                   patch((draft) => ({
                                     ...draft,
-                                    policies: draft.policies.map((p) => (p.id === policy.id ? { ...p, name: next } : p)),
+                                    policies: draft.policies.map((p) =>
+                                      p.id === policy.id ? { ...p, name: next } : p,
+                                    ),
                                   }))
                                 }
                               />
@@ -1433,7 +1529,9 @@ function HomeContent() {
                             <div className="flex items-center gap-3">
                               <span
                                 className={
-                                  Math.abs(weightSum - 100) <= 0.01 ? "text-xs text-[#3f7a52]" : "text-xs font-semibold text-[#b44b43]"
+                                  Math.abs(weightSum - 100) <= 0.01
+                                    ? "text-xs text-[#3f7a52]"
+                                    : "text-xs font-semibold text-[#b44b43]"
                                 }
                               >
                                 total: {weightSum}%
@@ -1442,7 +1540,12 @@ function HomeContent() {
                                 type="button"
                                 className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
                                 aria-label="Remove policy"
-                                onClick={() => patch((draft) => ({ ...draft, policies: draft.policies.filter((p) => p.id !== policy.id) }))}
+                                onClick={() =>
+                                  patch((draft) => ({
+                                    ...draft,
+                                    policies: draft.policies.filter((p) => p.id !== policy.id),
+                                  }))
+                                }
                               >
                                 <TrashIcon />
                               </button>
@@ -1450,14 +1553,19 @@ function HomeContent() {
                           </div>
                           <p className="mt-2 text-xs text-[#5b5148]">
                             {(() => {
-                              const used = budget.expenses.filter((e) => e.policyId === policy.id).map((e) => e.name || "(unnamed)");
+                              const used = budget.expenses
+                                .filter((e) => e.policyId === policy.id)
+                                .map((e) => e.name || "(unnamed)");
                               return used.length > 0 ? `Used by: ${used.join(", ")}` : "Not used by any expense.";
                             })()}
                           </p>
                           <div className="mt-3 flex flex-col gap-3">
                             {policy.rules.map((rule, ruleIndex) => (
                               // biome-ignore lint/suspicious/noArrayIndexKey: rules are positional and have no stable id
-                              <div key={`${policy.id}-rule-${ruleIndex}`} className="rounded-xl border border-[#eee0d1] bg-white/70 p-3">
+                              <div
+                                key={`${policy.id}-rule-${ruleIndex}`}
+                                className="rounded-xl border border-[#eee0d1] bg-white/70 p-3"
+                              >
                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                   <div className="flex flex-wrap items-center gap-3">
                                     <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-[#4a4037]">
@@ -1470,7 +1578,12 @@ function HomeContent() {
                                             ...draft,
                                             policies: draft.policies.map((p) =>
                                               p.id === policy.id
-                                                ? { ...p, rules: p.rules.map((r, i) => (i === ruleIndex ? { ...r, weight: next } : r)) }
+                                                ? {
+                                                    ...p,
+                                                    rules: p.rules.map((r, i) =>
+                                                      i === ruleIndex ? { ...r, weight: next } : r,
+                                                    ),
+                                                  }
                                                 : p,
                                             ),
                                           }))
@@ -1489,7 +1602,11 @@ function HomeContent() {
                                                   ...p,
                                                   rules: p.rules.map((r, i) =>
                                                     i === ruleIndex
-                                                      ? { ...r, method: event.target.value as (typeof ALLOCATION_METHODS)[number] }
+                                                      ? {
+                                                          ...r,
+                                                          method: event.target
+                                                            .value as (typeof ALLOCATION_METHODS)[number],
+                                                        }
                                                       : r,
                                                   ),
                                                 }
@@ -1548,7 +1665,9 @@ function HomeContent() {
                                         patch((draft) => ({
                                           ...draft,
                                           policies: draft.policies.map((p) =>
-                                            p.id === policy.id ? { ...p, rules: p.rules.filter((_, i) => i !== ruleIndex) } : p,
+                                            p.id === policy.id
+                                              ? { ...p, rules: p.rules.filter((_, i) => i !== ruleIndex) }
+                                              : p,
                                           ),
                                         }))
                                       }
@@ -1567,7 +1686,10 @@ function HomeContent() {
                                   ...draft,
                                   policies: draft.policies.map((p) =>
                                     p.id === policy.id
-                                      ? { ...p, rules: [...p.rules, { unitTypes: [], weight: 0, method: "common_interest" }] }
+                                      ? {
+                                          ...p,
+                                          rules: [...p.rules, { unitTypes: [], weight: 0, method: "common_interest" }],
+                                        }
                                       : p,
                                   ),
                                 }))
@@ -1605,8 +1727,9 @@ function HomeContent() {
               {collapsedExpenses ? null : (
                 <>
                   <p className={`${sectionHint} mt-1`}>
-                    Grouped by category. Each line item is a per-year cost and a policy that decides how it is split. Drag the ☰ handle to
-                    reorder categories, or sort the line items within a category by name, amount, or split.
+                    Grouped by category. Each line item is a per-year cost and a policy that decides how it is split.
+                    Drag the ☰ handle to reorder categories, or sort the line items within a category by name, amount,
+                    or split.
                   </p>
                   <div className="mt-4 flex flex-col gap-5">
                     {expenseCategories.map((category) => {
@@ -1666,7 +1789,8 @@ function HomeContent() {
                               <CategoryName category={category} onRename={renameCategory} />
                               {catCollapsed && items.length > 0 ? (
                                 <span className="text-xs text-[#9a8a7b]">
-                                  {items.length} item{items.length !== 1 ? "s" : ""} &middot; {formatCurrency(categoryTotal)}/yr
+                                  {items.length} item{items.length !== 1 ? "s" : ""} &middot;{" "}
+                                  {formatCurrency(categoryTotal)}/yr
                                 </span>
                               ) : null}
                             </div>
@@ -1722,7 +1846,9 @@ function HomeContent() {
                                   onChange={(next) =>
                                     patch((draft) => ({
                                       ...draft,
-                                      expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, name: next } : e)),
+                                      expenses: draft.expenses.map((e) =>
+                                        e.id === expense.id ? { ...e, name: next } : e,
+                                      ),
                                     }))
                                   }
                                 />
@@ -1732,7 +1858,9 @@ function HomeContent() {
                                   onChange={(next) =>
                                     patch((draft) => ({
                                       ...draft,
-                                      expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, amount: next } : e)),
+                                      expenses: draft.expenses.map((e) =>
+                                        e.id === expense.id ? { ...e, amount: next } : e,
+                                      ),
                                     }))
                                   }
                                 />
@@ -1765,7 +1893,10 @@ function HomeContent() {
                                   className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
                                   aria-label="Remove expense"
                                   onClick={() =>
-                                    patch((draft) => ({ ...draft, expenses: draft.expenses.filter((e) => e.id !== expense.id) }))
+                                    patch((draft) => ({
+                                      ...draft,
+                                      expenses: draft.expenses.filter((e) => e.id !== expense.id),
+                                    }))
                                   }
                                 >
                                   <TrashIcon />
@@ -1773,7 +1904,11 @@ function HomeContent() {
                               </div>
                             ))}
                           {!catCollapsed && !dragCategory && (
-                            <button type="button" className={`${pillButton} self-start`} onClick={() => addExpenseAndFocus(category)}>
+                            <button
+                              type="button"
+                              className={`${pillButton} self-start`}
+                              onClick={() => addExpenseAndFocus(category)}
+                            >
                               Add expense
                             </button>
                           )}
@@ -1784,13 +1919,17 @@ function HomeContent() {
                       placeholder="Add category"
                       onAdd={(value) =>
                         patch((draft) =>
-                          draft.categories.includes(value) ? draft : { ...draft, categories: [...draft.categories, value] },
+                          draft.categories.includes(value)
+                            ? draft
+                            : { ...draft, categories: [...draft.categories, value] },
                         )
                       }
                     />
                     <div className="mt-2 flex items-center justify-between border-t border-[#eadccb] pt-3 text-sm font-semibold text-[#181716]">
                       <span>Total expenses</span>
-                      <span>{formatCurrency(budget.expenses.reduce((sum, expense) => sum + expense.amount, 0))}/yr</span>
+                      <span>
+                        {formatCurrency(budget.expenses.reduce((sum, expense) => sum + expense.amount, 0))}/yr
+                      </span>
                     </div>
                   </div>
                 </>
@@ -1801,8 +1940,9 @@ function HomeContent() {
             <section className={card}>
               <h2 className={sectionTitle}>Adjustments</h2>
               <p className={sectionHint}>
-                Inflation scales the entered expense amounts. Reserve is added on top for savings. Offsets adjust every unit of a type (e.g.
-                -5% to Commercial). Other income (e.g. laundry) is subtracted from the total, spread by each unit's share.
+                Inflation scales the entered expense amounts. Reserve is added on top for savings. Offsets adjust every
+                unit of a type (e.g. -5% to Commercial). Other income (e.g. laundry) is subtracted from the total,
+                spread by each unit's share.
               </p>
               <div className="mt-4 flex flex-wrap gap-6">
                 <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
@@ -1810,7 +1950,9 @@ function HomeContent() {
                   <PercentField
                     className={`${fieldBase} w-28`}
                     value={budget.adjustments.inflationPct}
-                    onChange={(next) => patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, inflationPct: next } }))}
+                    onChange={(next) =>
+                      patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, inflationPct: next } }))
+                    }
                   />
                 </span>
                 <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
@@ -1818,7 +1960,9 @@ function HomeContent() {
                   <PercentField
                     className={`${fieldBase} w-28`}
                     value={budget.adjustments.reservePct}
-                    onChange={(next) => patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, reservePct: next } }))}
+                    onChange={(next) =>
+                      patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, reservePct: next } }))
+                    }
                   />
                 </span>
                 <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
@@ -1826,7 +1970,9 @@ function HomeContent() {
                   <CurrencyField
                     className={`${fieldBase} w-36`}
                     value={budget.adjustments.incomeOffset ?? 0}
-                    onChange={(next) => patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, incomeOffset: next } }))}
+                    onChange={(next) =>
+                      patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, incomeOffset: next } }))
+                    }
                   />
                 </span>
               </div>
@@ -1841,7 +1987,10 @@ function HomeContent() {
                       ...draft,
                       adjustments: {
                         ...draft.adjustments,
-                        offsets: [...(draft.adjustments.offsets ?? []), { unitType: draft.unitTypes[0]?.name ?? "", pct: 0 }],
+                        offsets: [
+                          ...(draft.adjustments.offsets ?? []),
+                          { unitType: draft.unitTypes[0]?.name ?? "", pct: 0 },
+                        ],
                       },
                     }))
                   }
@@ -1884,7 +2033,9 @@ function HomeContent() {
                             ...draft,
                             adjustments: {
                               ...draft.adjustments,
-                              offsets: (draft.adjustments.offsets ?? []).map((o, i) => (i === offsetIndex ? { ...o, pct: next } : o)),
+                              offsets: (draft.adjustments.offsets ?? []).map((o, i) =>
+                                i === offsetIndex ? { ...o, pct: next } : o,
+                              ),
                             },
                           }))
                         }
@@ -1946,7 +2097,9 @@ function HomeContent() {
                   : ""}
                 {result.totals.reserve > 0.01 ? ` + reserve ${formatCurrency(result.totals.reserve)}` : ""}).{" "}
                 {result.unallocated > 0.01 ? (
-                  <span className="font-semibold text-[#b44b43]">{formatCurrency(result.unallocated)} unallocated.</span>
+                  <span className="font-semibold text-[#b44b43]">
+                    {formatCurrency(result.unallocated)} unallocated.
+                  </span>
                 ) : null}
               </p>
               <div className="mt-4 flex flex-col gap-4">
@@ -1987,10 +2140,12 @@ function HomeContent() {
                             : (() => {
                                 const delta = owner.monthly - owner.currentMonthly;
                                 const up = delta >= 0;
-                                const color = Math.abs(delta) < 0.01 ? "text-[#5b5148]" : up ? "text-[#b44b43]" : "text-[#3f7a52]";
+                                const color =
+                                  Math.abs(delta) < 0.01 ? "text-[#5b5148]" : up ? "text-[#b44b43]" : "text-[#3f7a52]";
                                 return (
                                   <div className="mt-1 text-sm text-[#5b5148]">
-                                    current {formatCurrency(owner.currentMonthly)}/mo &rarr; new {formatCurrency(owner.monthly)}/mo{" "}
+                                    current {formatCurrency(owner.currentMonthly)}/mo &rarr; new{" "}
+                                    {formatCurrency(owner.monthly)}/mo{" "}
                                     <span className={`font-semibold ${color}`}>
                                       ({up ? "+" : "-"}
                                       {formatCurrency(Math.abs(delta))}/mo
@@ -2006,7 +2161,10 @@ function HomeContent() {
                             <div className="flex flex-col gap-1">
                               <p className={groupHeading}>Per unit</p>
                               {(unitsByOwner.get(owner.ownerId) ?? []).map((unit) => (
-                                <div key={unit.unitId} className="flex items-center justify-between text-sm text-[#4a4037]">
+                                <div
+                                  key={unit.unitId}
+                                  className="flex items-center justify-between text-sm text-[#4a4037]"
+                                >
                                   <span>
                                     {unit.label} <span className="text-xs text-[#9a8a7b]">({unit.type})</span>
                                   </span>
@@ -2223,7 +2381,8 @@ function BatchModal({
             <span className="font-semibold text-[#3f7a52]">{parsedCount}</span> parsed
             {kind !== "owner" ? (
               <>
-                , <span className={skipped.length > 0 ? "font-semibold text-[#b44b43]" : ""}>{skipped.length}</span> skipped
+                , <span className={skipped.length > 0 ? "font-semibold text-[#b44b43]" : ""}>{skipped.length}</span>{" "}
+                skipped
               </>
             ) : null}
             .
@@ -2248,7 +2407,12 @@ function BatchModal({
           <button type="button" className={pillButton} onClick={onCancel}>
             Cancel
           </button>
-          <button type="button" className={`${solidButton} disabled:opacity-40`} disabled={parsedCount === 0} onClick={apply}>
+          <button
+            type="button"
+            className={`${solidButton} disabled:opacity-40`}
+            disabled={parsedCount === 0}
+            onClick={apply}
+          >
             {replaceAll ? "Replace" : "Add"} {parsedCount > 0 ? `(${parsedCount})` : ""}
           </button>
         </div>
@@ -2299,7 +2463,15 @@ function NumberField({
 }
 
 // Currency input with a $ prefix: ignores a typed $, shows 2 decimals when idle, raw value while editing.
-function CurrencyField({ value, onChange, className }: { value: number; onChange: (next: number) => void; className: string }) {
+function CurrencyField({
+  value,
+  onChange,
+  className,
+}: {
+  value: number;
+  onChange: (next: number) => void;
+  className: string;
+}) {
   const [draft, setDraft] = useState<string | null>(null);
   const commit = () => {
     if (draft !== null) {
@@ -2312,7 +2484,9 @@ function CurrencyField({ value, onChange, className }: { value: number; onChange
   };
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#8a7768]">$</span>
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#8a7768]">
+        $
+      </span>
       <input
         className={`${className} pl-7`}
         type="text"
@@ -2377,7 +2551,15 @@ function PercentField({
 }
 
 // Common-interest input: shows 4 decimals (with trailing zeros) when idle, raw value while editing.
-function CiInput({ value, onChange, className }: { value: number; onChange: (next: number) => void; className: string }) {
+function CiInput({
+  value,
+  onChange,
+  className,
+}: {
+  value: number;
+  onChange: (next: number) => void;
+  className: string;
+}) {
   const [draft, setDraft] = useState<string | null>(null);
   const commit = () => {
     if (draft !== null) {

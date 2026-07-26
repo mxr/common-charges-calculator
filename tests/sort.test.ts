@@ -14,10 +14,22 @@ import {
 } from "../lib/sort";
 import type { Expense, Owner, Unit, UnitClassification, UnitType } from "../lib/types";
 
-const u = (id: string, label: string, type: string, ci: number, ownerId = ""): Unit => ({ id, label, type, commonInterest: ci, ownerId });
+const u = (id: string, label: string, type: string, ci: number, ownerId = ""): Unit => ({
+  id,
+  label,
+  type,
+  commonInterest: ci,
+  ownerId,
+});
 const o = (id: string, name: string, currentMonthly = 0): Owner => ({ id, name, excluded: false, currentMonthly });
 const t = (name: string, classification: UnitClassification = "primary"): UnitType => ({ name, classification });
-const e = (id: string, name: string, amount: number, policyId = "p"): Expense => ({ id, name, amount, policyId, category: "c" });
+const e = (id: string, name: string, amount: number, policyId = "p"): Expense => ({
+  id,
+  name,
+  amount,
+  policyId,
+  category: "c",
+});
 
 describe("compareUnits", () => {
   it("natural-sorts labels so S2 precedes S10", () => {
@@ -42,8 +54,16 @@ describe("compareUnits", () => {
 describe("compareOwners / compareUnitTypes / compareExpenses", () => {
   it("compareOwners by name and currentMonthly", () => {
     const owners = [o("1", "Carol", 200), o("2", "Alice", 100), o("3", "Bob", 300)];
-    expect([...owners].sort((a, b) => compareOwners(a, b, "name", "asc")).map((x) => x.name)).toEqual(["Alice", "Bob", "Carol"]);
-    expect([...owners].sort((a, b) => compareOwners(a, b, "currentMonthly", "desc")).map((x) => x.name)).toEqual(["Bob", "Carol", "Alice"]);
+    expect([...owners].sort((a, b) => compareOwners(a, b, "name", "asc")).map((x) => x.name)).toEqual([
+      "Alice",
+      "Bob",
+      "Carol",
+    ]);
+    expect([...owners].sort((a, b) => compareOwners(a, b, "currentMonthly", "desc")).map((x) => x.name)).toEqual([
+      "Bob",
+      "Carol",
+      "Alice",
+    ]);
   });
 
   it("compareUnitTypes by name and classification", () => {
@@ -53,7 +73,9 @@ describe("compareOwners / compareUnitTypes / compareExpenses", () => {
       "Residential",
       "Storage",
     ]);
-    const byClass = [...types].sort((a, b) => compareUnitTypes(a, b, "classification", "asc")).map((x) => x.classification);
+    const byClass = [...types]
+      .sort((a, b) => compareUnitTypes(a, b, "classification", "asc"))
+      .map((x) => x.classification);
     expect(byClass).toEqual(["ancillary", "primary", "primary"]);
   });
 
@@ -63,7 +85,9 @@ describe("compareOwners / compareUnitTypes / compareExpenses", () => {
       ["pA", "Zeta"],
       ["pB", "Alpha"],
     ]);
-    expect([...expenses].sort((a, b) => compareExpenses(a, b, "amount", "asc", policyName)).map((x) => x.amount)).toEqual([100, 200, 500]);
+    expect(
+      [...expenses].sort((a, b) => compareExpenses(a, b, "amount", "asc", policyName)).map((x) => x.amount),
+    ).toEqual([100, 200, 500]);
     expect([...expenses].sort((a, b) => compareExpenses(a, b, "split", "asc", policyName)).map((x) => x.name)).toEqual([
       "Water",
       "Insurance",

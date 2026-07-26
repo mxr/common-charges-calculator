@@ -60,7 +60,13 @@ export const DEFAULT_BUDGET: Budget = {
     {
       id: "policy-standard",
       name: "Standard (by common interest)",
-      rules: [{ unitTypes: ["Residential", "Commercial", "Storage", "Garage", "Cabana"], weight: 100, method: "common_interest" }],
+      rules: [
+        {
+          unitTypes: ["Residential", "Commercial", "Storage", "Garage", "Cabana"],
+          weight: 100,
+          method: "common_interest",
+        },
+      ],
     },
     {
       id: "policy-no-commercial",
@@ -89,17 +95,41 @@ export const DEFAULT_BUDGET: Budget = {
   // Within each category several line items share an amount or a split policy, so sorting by amount
   // then name, or split then amount, demonstrates that the earlier sort survives as a tiebreaker.
   expenses: [
-    { id: "exp-insurance", name: "Building insurance", category: "Insurance", amount: 3600, policyId: "policy-standard" },
-    { id: "exp-umbrella", name: "Umbrella liability", category: "Insurance", amount: 3600, policyId: "policy-standard" },
+    {
+      id: "exp-insurance",
+      name: "Building insurance",
+      category: "Insurance",
+      amount: 3600,
+      policyId: "policy-standard",
+    },
+    {
+      id: "exp-umbrella",
+      name: "Umbrella liability",
+      category: "Insurance",
+      amount: 3600,
+      policyId: "policy-standard",
+    },
     { id: "exp-flood", name: "Flood insurance", category: "Insurance", amount: 1200, policyId: "policy-no-commercial" },
     { id: "exp-water", name: "Water & sewer", category: "Utilities", amount: 1800, policyId: "policy-standard" },
     { id: "exp-electric", name: "Electric (common)", category: "Utilities", amount: 1800, policyId: "policy-super" },
     { id: "exp-gas", name: "Gas", category: "Utilities", amount: 900, policyId: "policy-standard" },
     { id: "exp-fiber", name: "Fiber internet", category: "Utilities", amount: 900, policyId: "policy-per-residential" },
-    { id: "exp-elevator", name: "Elevator maintenance", category: "Maintenance", amount: 1400, policyId: "policy-no-commercial" },
+    {
+      id: "exp-elevator",
+      name: "Elevator maintenance",
+      category: "Maintenance",
+      amount: 1400,
+      policyId: "policy-no-commercial",
+    },
     { id: "exp-roof", name: "Roof repair", category: "Maintenance", amount: 1400, policyId: "policy-standard" },
     { id: "exp-landscaping", name: "Landscaping", category: "Maintenance", amount: 1400, policyId: "policy-standard" },
-    { id: "exp-garage-clean", name: "Garage cleaning", category: "Maintenance", amount: 600, policyId: "policy-parking" },
+    {
+      id: "exp-garage-clean",
+      name: "Garage cleaning",
+      category: "Maintenance",
+      amount: 600,
+      policyId: "policy-parking",
+    },
     { id: "exp-super", name: "Superintendent", category: "Services", amount: 9000, policyId: "policy-super" },
     { id: "exp-mgmt", name: "Property management", category: "Services", amount: 2700, policyId: "policy-standard" },
     { id: "exp-snow", name: "Snow removal", category: "Services", amount: 2700, policyId: "policy-parking" },

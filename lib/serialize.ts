@@ -18,7 +18,15 @@ type PackedRule = [Ref[], number, number];
 type PackedPolicy = [string, PackedRule[]];
 type PackedExpense = [string, Ref, number, number];
 type PackedAdjustments = [number, number, Array<[Ref, number]>, number];
-type Packed = [PackedUnitType[], string[], PackedOwner[], PackedUnit[], PackedPolicy[], PackedExpense[], PackedAdjustments];
+type Packed = [
+  PackedUnitType[],
+  string[],
+  PackedOwner[],
+  PackedUnit[],
+  PackedPolicy[],
+  PackedExpense[],
+  PackedAdjustments,
+];
 
 const pack = (budget: Budget): Packed => {
   const ownerIndex = new Map(budget.owners.map((owner, i) => [owner.id, i]));
@@ -33,12 +41,16 @@ const pack = (budget: Budget): Packed => {
     budget.unitTypes.map((type) => [type.name, type.classification === "ancillary" ? 1 : 0] as PackedUnitType),
     budget.categories,
     budget.owners.map((owner) => [owner.name, owner.excluded ? 1 : 0, owner.currentMonthly] as PackedOwner),
-    budget.units.map((unit) => [unit.label, typeRef(unit.type), unit.commonInterest, ownerIndex.get(unit.ownerId) ?? -1] as PackedUnit),
+    budget.units.map(
+      (unit) => [unit.label, typeRef(unit.type), unit.commonInterest, ownerIndex.get(unit.ownerId) ?? -1] as PackedUnit,
+    ),
     budget.policies.map(
       (policy) =>
         [
           policy.name,
-          policy.rules.map((rule) => [rule.unitTypes.map(typeRef), rule.weight, ALLOCATION_METHODS.indexOf(rule.method)] as PackedRule),
+          policy.rules.map(
+            (rule) => [rule.unitTypes.map(typeRef), rule.weight, ALLOCATION_METHODS.indexOf(rule.method)] as PackedRule,
+          ),
         ] as PackedPolicy,
     ),
     budget.expenses.map(
@@ -79,7 +91,12 @@ const unpack = (packed: Packed): Budget => {
   return normalizeBudget({
     unitTypes: unitTypeList,
     categories,
-    owners: owners.map(([name, excluded, currentMonthly], i) => ({ id: ownerIds[i], name, excluded: excluded === 1, currentMonthly })),
+    owners: owners.map(([name, excluded, currentMonthly], i) => ({
+      id: ownerIds[i],
+      name,
+      excluded: excluded === 1,
+      currentMonthly,
+    })),
     units: units.map(([label, type, commonInterest, ownerRef], i) => ({
       id: `unit-${i}`,
       label,
@@ -113,7 +130,8 @@ const unpack = (packed: Packed): Budget => {
 };
 
 // Compact, URL-safe encoding for the `?b=` param.
-export const serializeBudgetUrl = (budget: Budget): string => compressToEncodedURIComponent(JSON.stringify(pack(budget)));
+export const serializeBudgetUrl = (budget: Budget): string =>
+  compressToEncodedURIComponent(JSON.stringify(pack(budget)));
 
 export const parseBudgetUrl = (value: string | null): Budget | null => {
   if (!value) {

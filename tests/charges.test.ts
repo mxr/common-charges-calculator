@@ -6,7 +6,12 @@ import { parseOwnerLines, parseUnitLines, parseUnitTypeLines } from "../lib/pars
 import { exportBudgetJson, parseBudgetJson, parseBudgetUrl, serializeBudgetUrl } from "../lib/serialize";
 import type { Budget } from "../lib/types";
 
-const owner = (id: string, excluded = false): Budget["owners"][number] => ({ id, name: id, excluded, currentMonthly: 0 });
+const owner = (id: string, excluded = false): Budget["owners"][number] => ({
+  id,
+  name: id,
+  excluded,
+  currentMonthly: 0,
+});
 
 const unit = (id: string, type: string, commonInterest: number, ownerId: string): Budget["units"][number] => ({
   id,
@@ -16,7 +21,10 @@ const unit = (id: string, type: string, commonInterest: number, ownerId: string)
   ownerId,
 });
 
-const ut = (name: string, classification: Budget["unitTypes"][number]["classification"] = "primary"): Budget["unitTypes"][number] => ({
+const ut = (
+  name: string,
+  classification: Budget["unitTypes"][number]["classification"] = "primary",
+): Budget["unitTypes"][number] => ({
   name,
   classification,
 });
@@ -26,7 +34,13 @@ const makeBudget = (overrides: Partial<Budget>): Budget => ({
   units: [unit("u1", "residential", 100, "o1")],
   unitTypes: [ut("residential"), ut("commercial")],
   categories: ["general"],
-  policies: [{ id: "p", name: "standard", rules: [{ unitTypes: ["residential", "commercial"], weight: 100, method: "common_interest" }] }],
+  policies: [
+    {
+      id: "p",
+      name: "standard",
+      rules: [{ unitTypes: ["residential", "commercial"], weight: 100, method: "common_interest" }],
+    },
+  ],
   expenses: [{ id: "e", name: "exp", category: "general", amount: 100, policyId: "p" }],
   adjustments: { inflationPct: 0, reservePct: 0 },
   ...overrides,
@@ -52,9 +66,15 @@ describe("computeCharges allocation methods", () => {
 
   it("splits equally per unit regardless of common interest", () => {
     const budget = makeBudget({
-      units: [unit("u1", "residential", 10, "o1"), unit("u2", "residential", 80, "o1"), unit("u3", "residential", 10, "o1")],
+      units: [
+        unit("u1", "residential", 10, "o1"),
+        unit("u2", "residential", 80, "o1"),
+        unit("u3", "residential", 10, "o1"),
+      ],
       expenses: [{ id: "e", name: "fiber", category: "general", amount: 90, policyId: "p" }],
-      policies: [{ id: "p", name: "per-unit", rules: [{ unitTypes: ["residential"], weight: 100, method: "equal_per_unit" }] }],
+      policies: [
+        { id: "p", name: "per-unit", rules: [{ unitTypes: ["residential"], weight: 100, method: "equal_per_unit" }] },
+      ],
     });
     for (const id of ["u1", "u2", "u3"]) {
       expect(chargeFor(budget, id).total).toBeCloseTo(30);
@@ -74,7 +94,13 @@ describe("computeCharges policies", () => {
   it("excludes commercial units (elevator)", () => {
     const budget = makeBudget({
       units: [unit("u1", "residential", 60, "o1"), unit("u2", "commercial", 40, "o1")],
-      policies: [{ id: "p", name: "no-commercial", rules: [{ unitTypes: ["residential"], weight: 100, method: "common_interest" }] }],
+      policies: [
+        {
+          id: "p",
+          name: "no-commercial",
+          rules: [{ unitTypes: ["residential"], weight: 100, method: "common_interest" }],
+        },
+      ],
     });
     expect(chargeFor(budget, "u1").total).toBeCloseTo(100);
     expect(chargeFor(budget, "u2").total).toBeCloseTo(0);
@@ -82,7 +108,11 @@ describe("computeCharges policies", () => {
 
   it("applies a multi-rule 5/95 super split", () => {
     const budget = makeBudget({
-      units: [unit("comm", "commercial", 20, "o1"), unit("res1", "residential", 50, "o1"), unit("res2", "residential", 30, "o1")],
+      units: [
+        unit("comm", "commercial", 20, "o1"),
+        unit("res1", "residential", 50, "o1"),
+        unit("res2", "residential", 30, "o1"),
+      ],
       expenses: [{ id: "e", name: "super", category: "general", amount: 1000, policyId: "p" }],
       policies: [
         {
@@ -151,7 +181,11 @@ describe("computeCharges adjustments", () => {
 
   it("distributes the rebalance proportional to common interest", () => {
     const budget = makeBudget({
-      units: [unit("c1", "commercial", 20, "o1"), unit("r1", "residential", 60, "o1"), unit("r2", "residential", 20, "o1")],
+      units: [
+        unit("c1", "commercial", 20, "o1"),
+        unit("r1", "residential", 60, "o1"),
+        unit("r2", "residential", 20, "o1"),
+      ],
       adjustments: { inflationPct: 0, reservePct: 0, offsets: [{ unitType: "commercial", pct: -10 }] },
     });
     // commercial base 20 -> -2; r1 and r2 split +2 by CI 60:20 -> +1.5 and +0.5
@@ -199,7 +233,9 @@ describe("computeCharges adjustments", () => {
 describe("computeCharges edge cases and totals", () => {
   it("reports unallocated money when a rule has no eligible units", () => {
     const budget = makeBudget({
-      policies: [{ id: "p", name: "ghost", rules: [{ unitTypes: ["penthouse"], weight: 100, method: "common_interest" }] }],
+      policies: [
+        { id: "p", name: "ghost", rules: [{ unitTypes: ["penthouse"], weight: 100, method: "common_interest" }] },
+      ],
     });
     const result = computeCharges(budget);
     expect(result.unallocated).toBeCloseTo(100);
@@ -375,9 +411,16 @@ describe("serialize round-trips", () => {
       categories: ["general"],
       owners: [owner("o1")],
       units: [unit("u1", "commercial", 100, "ghost")],
-      policies: [{ id: "p", name: "standard", rules: [{ unitTypes: ["commercial"], weight: 100, method: "common_interest" }] }],
+      policies: [
+        { id: "p", name: "standard", rules: [{ unitTypes: ["commercial"], weight: 100, method: "common_interest" }] },
+      ],
       expenses: [{ id: "e", name: "exp", category: "misc", amount: 100, policyId: "p2" }],
-      adjustments: { inflationPct: 5, reservePct: 10, offsets: [{ unitType: "commercial", pct: -5 }], incomeOffset: 200 },
+      adjustments: {
+        inflationPct: 5,
+        reservePct: 10,
+        offsets: [{ unitType: "commercial", pct: -5 }],
+        incomeOffset: 200,
+      },
     });
     const parsed = parseBudgetUrl(serializeBudgetUrl(budget)) as Budget;
     expect(parsed.units[0].type).toBe("commercial");
@@ -426,7 +469,10 @@ describe("batch parsing", () => {
   });
 
   it("parses valid unit lines and skips bad ones", () => {
-    const owners = [owner("owner-1"), { id: "owner-2", name: "Maple Holdings LLC", excluded: false, currentMonthly: 0 }];
+    const owners = [
+      owner("owner-1"),
+      { id: "owner-2", name: "Maple Holdings LLC", excluded: false, currentMonthly: 0 },
+    ];
     const text = [
       "1A,\tresidential ,  30% , owner-1",
       "CU1\tCOMMERCIAL\t20\tmaple holdings llc",
@@ -450,7 +496,15 @@ describe("batch parsing", () => {
   });
 
   it("parses unit types with an optional classification and skips bad ones", () => {
-    const text = ["Residential, primary", "Storage,\tancillary", "  Garage  ", "Cabana, p", "Lobby, a", "", "Penthouse, deluxe"].join("\n");
+    const text = [
+      "Residential, primary",
+      "Storage,\tancillary",
+      "  Garage  ",
+      "Cabana, p",
+      "Lobby, a",
+      "",
+      "Penthouse, deluxe",
+    ].join("\n");
     const { unitTypes, skipped } = parseUnitTypeLines(text);
     expect(unitTypes).toEqual([
       { name: "Residential", classification: "primary" },
