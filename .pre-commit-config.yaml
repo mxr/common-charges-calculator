@@ -13,7 +13,7 @@ repos:
   - id: pretty-format-yaml
     args: [--autofix, --line-width=120]
 - repo: https://github.com/biomejs/pre-commit
-  rev: 5bb716344fd6979d991634e7ece88f407e599ee0  # frozen: v2.5.4
+  rev: f6d5e1fa73430779cef768d00c512fa86162fe6e  # frozen: v2.5.5
   hooks:
   - id: biome-check
 - repo: https://github.com/pre-commit/sync-pre-commit-deps
@@ -27,11 +27,11 @@ repos:
     name: biome migrate
     entry: biome migrate --write
     language: node
-    additional_dependencies: ['@biomejs/biome@2.5.4']
+    additional_dependencies: ['@biomejs/biome@2.5.5']
     files: ^\.pre-commit-config\.yaml$
     pass_filenames: false
 - repo: https://github.com/zizmorcore/zizmor-pre-commit
-  rev: 64a97fb7fa63188393d3215c6e312f5f9c6d0f78  # frozen: v1.27.0
+  rev: 067260dc5fe6ea86b7551bfd6f8b3ba4e6c93129  # frozen: v1.28.0
   hooks:
   - id: zizmor
     args: [--no-progress, --fix]
