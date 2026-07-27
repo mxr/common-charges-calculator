@@ -27,7 +27,7 @@ repos:
     name: biome migrate
     entry: biome migrate --write
     language: node
-    additional_dependencies: ['@biomejs/biome@2.5.4']
+    additional_dependencies: ['@biomejs/biome@2.5.5']
     files: ^\.pre-commit-config\.yaml$
     pass_filenames: false
 - repo: https://github.com/zizmorcore/zizmor-pre-commit
