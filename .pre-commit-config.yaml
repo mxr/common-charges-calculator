@@ -1,6 +1,6 @@
 repos:
 - repo: https://github.com/biomejs/pre-commit
-  rev: f6d5e1fa73430779cef768d00c512fa86162fe6e  # frozen: v2.5.5
+  rev: d1ce4972fb5ad09afd33b432bca71e8c5dfbb2b5  # frozen: v2.5.6
   hooks:
   - id: biome-check
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
@@ -28,7 +28,7 @@ repos:
     additional_dependencies:
     - github.com/wasilibs/go-shellcheck/cmd/shellcheck@latest
 - repo: https://github.com/zizmorcore/zizmor-pre-commit
-  rev: 067260dc5fe6ea86b7551bfd6f8b3ba4e6c93129  # frozen: v1.28.0
+  rev: 451b56af716f9f0d0c2b816503a3fd0cf8b036fa  # frozen: v1.29.0
   hooks:
   - id: zizmor
     args: [--no-progress, --fix]
@@ -38,6 +38,6 @@ repos:
     name: biome migrate
     entry: biome migrate --write
     language: node
-    additional_dependencies: ['@biomejs/biome@2.5.5']
+    additional_dependencies: ['@biomejs/biome@2.5.6']
     files: ^\.pre-commit-config\.yaml$
     pass_filenames: false
