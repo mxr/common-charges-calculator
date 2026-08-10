@@ -1,6 +1,6 @@
 repos:
 - repo: https://github.com/biomejs/pre-commit
-  rev: d1ce4972fb5ad09afd33b432bca71e8c5dfbb2b5  # frozen: v2.5.6
+  rev: 94dfd97e59f6fcc5abec3bf328ed6108a82fa760  # frozen: v2.5.7
   hooks:
   - id: biome-check
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
