@@ -34,10 +34,10 @@ repos:
     args: [--no-progress, --fix]
 - repo: local
   hooks:
-  - id: biome-migrate
-    name: biome migrate
-    entry: biome migrate --write
-    language: node
-    additional_dependencies: ['@biomejs/biome@2.5.7']
-    files: ^\.pre-commit-config\.yaml$
+  - id: biome-schema-version
+    name: biome schema version
+    entry: |-
+      python3 -c 'import re, pathlib; cfg = pathlib.Path(".pre-commit-config.yaml").read_text(); ver = re.search(r"biomejs/pre-commit.*?frozen: v([0-9.]+)", cfg, re.S)[1]; p = pathlib.Path("biome.json"); p.write_text(re.sub(r"schemas/[^/]+/schema\.json", f"schemas/{ver}/schema.json", p.read_text()))'
+    language: python
+    files: ^(biome\.json|\.pre-commit-config\.yaml)$
     pass_filenames: false
