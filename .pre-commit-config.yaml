@@ -1,6 +1,6 @@
 repos:
 - repo: https://github.com/biomejs/pre-commit
-  rev: 08eb05de15ce57c7eb9c9ef536540ad13098d687  # frozen: v2.5.10
+  rev: 8a54093106c1c85f977afbb95ada8685786a2999  # frozen: v2.5.11
   hooks:
   - id: biome-check
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
@@ -23,7 +23,7 @@ repos:
     additional_dependencies:
     - github.com/wasilibs/go-shellcheck/cmd/shellcheck@latest
 - repo: https://github.com/zizmorcore/zizmor-pre-commit
-  rev: 451b56af716f9f0d0c2b816503a3fd0cf8b036fa  # frozen: v1.29.0
+  rev: cef8b8350da46d8114c7e6b7272aebdccdf193ce  # frozen: v1.30.0
   hooks:
   - id: zizmor
     args: [--no-progress, --fix]
