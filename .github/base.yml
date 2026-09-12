@@ -1,2 +1,4 @@
 stack: [frontend]
-renovateDisable: [tar]
+opts:
+  renovate:
+    tar: false
