@@ -1,4 +1,4 @@
-name: tests
+name: main
 
 on:
   pull_request:
@@ -39,7 +39,7 @@ jobs:
             - package.json
             - package-lock.json
 
-  test-real:
+  main-real:
     needs: [changes]
     if: needs.changes.outputs.project_files == 'true'
     runs-on: ubuntu-latest
@@ -67,14 +67,14 @@ jobs:
         name: coverage-report
         path: coverage
 
-  test:
-    needs: [changes, test-real]
+  main:
+    needs: [changes, main-real]
     if: always()
     runs-on: ubuntu-latest
     steps:
     - env:
         PROJECT_FILES: ${{ needs.changes.outputs.project_files }}
-        TEST_REAL_RESULT: ${{ needs.test-real.result }}
+        TEST_REAL_RESULT: ${{ needs.main-real.result }}
       run: |
         if [ "$PROJECT_FILES" != "true" ]; then
           exit 0
