@@ -1,0 +1,4 @@
+stack: [frontend]
+opts:
+  renovate:
+    tar: false

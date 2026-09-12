@@ -29,7 +29,6 @@
     "build": "next build --turbopack",
     "dev": "next dev --turbopack",
     "start": "next start",
-    "tag": "bash scripts/tag.sh",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest"
