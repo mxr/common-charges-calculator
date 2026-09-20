@@ -128,7 +128,7 @@ const normalizeUnitType = (value: unknown): UnitType | null => {
   if (typeof value === "string") {
     return value ? { name: value, classification: "primary" } : null;
   }
-  const raw = (value ?? {}) as Record<string, unknown>;
+  const raw = (value ?? {}) as Partial<Record<keyof UnitType, unknown>>;
   const name = asString(raw.name);
   return name ? { name, classification: normalizeClassification(raw.classification) } : null;
 };
@@ -137,7 +137,7 @@ const normalizeUnitTypes = (value: unknown): UnitType[] =>
   Array.isArray(value) ? value.map(normalizeUnitType).filter((type): type is UnitType => type !== null) : [];
 
 const normalizeRule = (value: unknown): PolicyRule => {
-  const raw = (value ?? {}) as Record<string, unknown>;
+  const raw = (value ?? {}) as Partial<Record<keyof PolicyRule, unknown>>;
   return {
     unitTypes: asStringArray(raw.unitTypes),
     weight: asNumber(raw.weight),
@@ -146,7 +146,7 @@ const normalizeRule = (value: unknown): PolicyRule => {
 };
 
 const normalizePolicy = (value: unknown, index: number): Policy => {
-  const raw = (value ?? {}) as Record<string, unknown>;
+  const raw = (value ?? {}) as Partial<Record<keyof Policy, unknown>>;
   const rules = Array.isArray(raw.rules) ? raw.rules.map(normalizeRule) : [];
   return {
     id: asString(raw.id) || makeId("policy"),
@@ -156,7 +156,7 @@ const normalizePolicy = (value: unknown, index: number): Policy => {
 };
 
 const normalizeOwner = (value: unknown, index: number): Owner => {
-  const raw = (value ?? {}) as Record<string, unknown>;
+  const raw = (value ?? {}) as Partial<Record<keyof Owner, unknown>>;
   return {
     id: asString(raw.id) || makeId("owner"),
     name: asString(raw.name) || `Owner ${index + 1}`,
@@ -166,7 +166,7 @@ const normalizeOwner = (value: unknown, index: number): Owner => {
 };
 
 const normalizeUnit = (value: unknown, index: number): Unit => {
-  const raw = (value ?? {}) as Record<string, unknown>;
+  const raw = (value ?? {}) as Partial<Record<keyof Unit, unknown>>;
   return {
     id: asString(raw.id) || makeId("unit"),
     label: asString(raw.label) || `Unit ${index + 1}`,
@@ -177,7 +177,7 @@ const normalizeUnit = (value: unknown, index: number): Unit => {
 };
 
 const normalizeExpense = (value: unknown, index: number): Expense => {
-  const raw = (value ?? {}) as Record<string, unknown>;
+  const raw = (value ?? {}) as Partial<Record<keyof Expense, unknown>>;
   return {
     id: asString(raw.id) || makeId("exp"),
     name: asString(raw.name) || `Expense ${index + 1}`,
@@ -188,12 +188,12 @@ const normalizeExpense = (value: unknown, index: number): Expense => {
 };
 
 const normalizeOffset = (value: unknown): TypeOffset => {
-  const raw = (value ?? {}) as Record<string, unknown>;
+  const raw = (value ?? {}) as Partial<Record<keyof TypeOffset, unknown>>;
   return { unitType: asString(raw.unitType), pct: asNumber(raw.pct) };
 };
 
 const normalizeAdjustments = (value: unknown): Adjustments => {
-  const raw = (value ?? {}) as Record<string, unknown>;
+  const raw = (value ?? {}) as Partial<Record<keyof Adjustments, unknown>>;
   return {
     inflationPct: asNumber(raw.inflationPct),
     reservePct: asNumber(raw.reservePct),
@@ -204,7 +204,7 @@ const normalizeAdjustments = (value: unknown): Adjustments => {
 
 // Coerce an untrusted parsed object (from URL or imported file) into a valid Budget.
 export const normalizeBudget = (value: unknown): Budget => {
-  const raw = (value ?? {}) as Record<string, unknown>;
+  const raw = (value ?? {}) as Partial<Record<keyof Budget, unknown>>;
   return {
     owners: Array.isArray(raw.owners) ? raw.owners.map(normalizeOwner) : [],
     units: Array.isArray(raw.units) ? raw.units.map(normalizeUnit) : [],
