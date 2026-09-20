@@ -306,13 +306,13 @@ describe("normalizeBudget", () => {
       unitTypes: ["residential", 7, { name: "commercial", classification: "ancillary" }, { classification: "primary" }],
       adjustments: { inflationPct: "3", offsets: [{ unitType: "commercial", pct: "-5" }] },
     });
-    expect(budget.owners[0].id).toMatch(/^owner-/);
-    expect(budget.owners[0].excluded).toBe(false);
-    expect(budget.units[0].commonInterest).toBe(40);
-    expect(budget.policies[0].rules[0].weight).toBe(10);
-    expect(budget.policies[0].rules[0].method).toBe("common_interest");
-    expect(budget.policies[1].rules).toHaveLength(1);
-    expect(budget.expenses[0].amount).toBe(500);
+    expect(budget.owners[0]?.id).toMatch(/^owner-/);
+    expect(budget.owners[0]?.excluded).toBe(false);
+    expect(budget.units[0]?.commonInterest).toBe(40);
+    expect(budget.policies[0]?.rules[0]?.weight).toBe(10);
+    expect(budget.policies[0]?.rules[0]?.method).toBe("common_interest");
+    expect(budget.policies[1]?.rules).toHaveLength(1);
+    expect(budget.expenses[0]?.amount).toBe(500);
     expect(budget.unitTypes).toEqual([
       { name: "residential", classification: "primary" },
       { name: "commercial", classification: "ancillary" },
@@ -380,10 +380,10 @@ describe("serialize round-trips", () => {
       adjustments: { inflationPct: 5, reservePct: 10, offsets: [{ unitType: "commercial", pct: -5 }], incomeOffset: 200 },
     });
     const parsed = parseBudgetUrl(serializeBudgetUrl(budget)) as Budget;
-    expect(parsed.units[0].type).toBe("commercial");
-    expect(parsed.units[0].ownerId).toBe("");
-    expect(parsed.expenses[0].category).toBe("misc");
-    expect(parsed.expenses[0].policyId).toBe("");
+    expect(parsed.units[0]?.type).toBe("commercial");
+    expect(parsed.units[0]?.ownerId).toBe("");
+    expect(parsed.expenses[0]?.category).toBe("misc");
+    expect(parsed.expenses[0]?.policyId).toBe("");
     expect(parsed.adjustments.offsets).toEqual([{ unitType: "commercial", pct: -5 }]);
     expect(parsed.adjustments.incomeOffset).toBe(200);
   });

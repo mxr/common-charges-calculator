@@ -157,7 +157,7 @@ export function parseSortParam(raw: string): SortParam {
     } else if (parts[0] === "e" && parts.length === 4) {
       const [, category, key, dir] = parts;
       if ((key === "name" || key === "amount" || key === "split") && (dir === "asc" || dir === "desc")) {
-        result.expenses[decodeURIComponent(category)] = { key, dir };
+        result.expenses[decodeURIComponent(category ?? "")] = { key, dir };
       }
     }
   }

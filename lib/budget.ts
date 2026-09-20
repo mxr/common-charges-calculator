@@ -129,8 +129,8 @@ const normalizeUnitType = (value: unknown): UnitType | null => {
     return value ? { name: value, classification: "primary" } : null;
   }
   const raw = (value ?? {}) as Record<string, unknown>;
-  const name = asString(raw.name);
-  return name ? { name, classification: normalizeClassification(raw.classification) } : null;
+  const name = asString(raw["name"]);
+  return name ? { name, classification: normalizeClassification(raw["classification"]) } : null;
 };
 
 const normalizeUnitTypes = (value: unknown): UnitType[] =>
@@ -139,18 +139,18 @@ const normalizeUnitTypes = (value: unknown): UnitType[] =>
 const normalizeRule = (value: unknown): PolicyRule => {
   const raw = (value ?? {}) as Record<string, unknown>;
   return {
-    unitTypes: asStringArray(raw.unitTypes),
-    weight: asNumber(raw.weight),
-    method: normalizeMethod(raw.method),
+    unitTypes: asStringArray(raw["unitTypes"]),
+    weight: asNumber(raw["weight"]),
+    method: normalizeMethod(raw["method"]),
   };
 };
 
 const normalizePolicy = (value: unknown, index: number): Policy => {
   const raw = (value ?? {}) as Record<string, unknown>;
-  const rules = Array.isArray(raw.rules) ? raw.rules.map(normalizeRule) : [];
+  const rules = Array.isArray(raw["rules"]) ? raw["rules"].map(normalizeRule) : [];
   return {
-    id: asString(raw.id) || makeId("policy"),
-    name: asString(raw.name) || `Policy ${index + 1}`,
+    id: asString(raw["id"]) || makeId("policy"),
+    name: asString(raw["name"]) || `Policy ${index + 1}`,
     rules: rules.length > 0 ? rules : [{ unitTypes: [], weight: 100, method: "common_interest" }],
   };
 };
@@ -158,47 +158,47 @@ const normalizePolicy = (value: unknown, index: number): Policy => {
 const normalizeOwner = (value: unknown, index: number): Owner => {
   const raw = (value ?? {}) as Record<string, unknown>;
   return {
-    id: asString(raw.id) || makeId("owner"),
-    name: asString(raw.name) || `Owner ${index + 1}`,
-    excluded: Boolean(raw.excluded),
-    currentMonthly: asNumber(raw.currentMonthly),
+    id: asString(raw["id"]) || makeId("owner"),
+    name: asString(raw["name"]) || `Owner ${index + 1}`,
+    excluded: Boolean(raw["excluded"]),
+    currentMonthly: asNumber(raw["currentMonthly"]),
   };
 };
 
 const normalizeUnit = (value: unknown, index: number): Unit => {
   const raw = (value ?? {}) as Record<string, unknown>;
   return {
-    id: asString(raw.id) || makeId("unit"),
-    label: asString(raw.label) || `Unit ${index + 1}`,
-    type: asString(raw.type),
-    commonInterest: asNumber(raw.commonInterest),
-    ownerId: asString(raw.ownerId),
+    id: asString(raw["id"]) || makeId("unit"),
+    label: asString(raw["label"]) || `Unit ${index + 1}`,
+    type: asString(raw["type"]),
+    commonInterest: asNumber(raw["commonInterest"]),
+    ownerId: asString(raw["ownerId"]),
   };
 };
 
 const normalizeExpense = (value: unknown, index: number): Expense => {
   const raw = (value ?? {}) as Record<string, unknown>;
   return {
-    id: asString(raw.id) || makeId("exp"),
-    name: asString(raw.name) || `Expense ${index + 1}`,
-    category: asString(raw.category),
-    amount: asNumber(raw.amount),
-    policyId: asString(raw.policyId),
+    id: asString(raw["id"]) || makeId("exp"),
+    name: asString(raw["name"]) || `Expense ${index + 1}`,
+    category: asString(raw["category"]),
+    amount: asNumber(raw["amount"]),
+    policyId: asString(raw["policyId"]),
   };
 };
 
 const normalizeOffset = (value: unknown): TypeOffset => {
   const raw = (value ?? {}) as Record<string, unknown>;
-  return { unitType: asString(raw.unitType), pct: asNumber(raw.pct) };
+  return { unitType: asString(raw["unitType"]), pct: asNumber(raw["pct"]) };
 };
 
 const normalizeAdjustments = (value: unknown): Adjustments => {
   const raw = (value ?? {}) as Record<string, unknown>;
   return {
-    inflationPct: asNumber(raw.inflationPct),
-    reservePct: asNumber(raw.reservePct),
-    offsets: Array.isArray(raw.offsets) ? raw.offsets.map(normalizeOffset) : [],
-    incomeOffset: asNumber(raw.incomeOffset),
+    inflationPct: asNumber(raw["inflationPct"]),
+    reservePct: asNumber(raw["reservePct"]),
+    offsets: Array.isArray(raw["offsets"]) ? raw["offsets"].map(normalizeOffset) : [],
+    incomeOffset: asNumber(raw["incomeOffset"]),
   };
 };
 
@@ -206,13 +206,13 @@ const normalizeAdjustments = (value: unknown): Adjustments => {
 export const normalizeBudget = (value: unknown): Budget => {
   const raw = (value ?? {}) as Record<string, unknown>;
   return {
-    owners: Array.isArray(raw.owners) ? raw.owners.map(normalizeOwner) : [],
-    units: Array.isArray(raw.units) ? raw.units.map(normalizeUnit) : [],
-    unitTypes: normalizeUnitTypes(raw.unitTypes),
-    categories: asStringArray(raw.categories),
-    policies: Array.isArray(raw.policies) ? raw.policies.map(normalizePolicy) : [],
-    expenses: Array.isArray(raw.expenses) ? raw.expenses.map(normalizeExpense) : [],
-    adjustments: normalizeAdjustments(raw.adjustments),
+    owners: Array.isArray(raw["owners"]) ? raw["owners"].map(normalizeOwner) : [],
+    units: Array.isArray(raw["units"]) ? raw["units"].map(normalizeUnit) : [],
+    unitTypes: normalizeUnitTypes(raw["unitTypes"]),
+    categories: asStringArray(raw["categories"]),
+    policies: Array.isArray(raw["policies"]) ? raw["policies"].map(normalizePolicy) : [],
+    expenses: Array.isArray(raw["expenses"]) ? raw["expenses"].map(normalizeExpense) : [],
+    adjustments: normalizeAdjustments(raw["adjustments"]),
   };
 };
 
