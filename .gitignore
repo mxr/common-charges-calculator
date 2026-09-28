@@ -5,6 +5,7 @@
 .env*
 .vercel
 !/.gitattributes
+!/.github/actionlint.yml
 !/.github/mergify.yml
 !/.github/renovate.jsonc
 !/.github/workflows/main.yml
