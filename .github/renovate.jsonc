@@ -8,10 +8,6 @@
   "minimumReleaseAge": "7 days",
   "packageRules": [
     {
-      "matchPackageNames": ["tar"],
-      "enabled": false
-    },
-    {
       "commitMessageExtra": " ",
       "groupName": "update",
       "matchPackageNames": ["*"]
