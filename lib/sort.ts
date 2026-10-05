@@ -66,8 +66,8 @@ export function compareExpenses(a: Expense, b: Expense, key: ExpenseSortKey, dir
   if (key === "amount") {
     return (a.amount - b.amount) * factor;
   }
-  const av = key === "name" ? a.name || "" : (policyName.get(a.policyId) ?? "");
-  const bv = key === "name" ? b.name || "" : (policyName.get(b.policyId) ?? "");
+  const av = key === "name" ? a.name : (policyName.get(a.policyId) ?? "");
+  const bv = key === "name" ? b.name : (policyName.get(b.policyId) ?? "");
   return av.localeCompare(bv) * factor;
 }
 
@@ -155,9 +155,9 @@ export function parseSortParam(raw: string): SortParam {
         result.unitType = { key, dir };
       }
     } else if (parts[0] === "e" && parts.length === 4) {
-      const [, category, key, dir] = parts;
+      const [, category = "", key, dir] = parts;
       if ((key === "name" || key === "amount" || key === "split") && (dir === "asc" || dir === "desc")) {
-        result.expenses[decodeURIComponent(category ?? "")] = { key, dir };
+        result.expenses[decodeURIComponent(category)] = { key, dir };
       }
     }
   }

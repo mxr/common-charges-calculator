@@ -34,68 +34,48 @@ export type ChargeResult = {
   warnings: string[];
 };
 
-// Splits one rule's dollar amount across the eligible units, returning a unitId -> amount map.
-const splitRule = (rule: PolicyRule, amount: number, eligible: Unit[]): Map<string, number> => {
-  const result = new Map<string, number>();
-  if (eligible.length === 0 || amount === 0) {
-    return result;
-  }
+type UnitEntry = { unit: Unit; charge: UnitCharge };
 
-  if (rule.method === "equal_per_unit") {
-    const share = amount / eligible.length;
-    for (const unit of eligible) {
-      result.set(unit.id, share);
-    }
-    return result;
-  }
-
+// Splits one rule's dollar amount across the eligible units, returning each unit's share.
+const splitRule = (rule: PolicyRule, amount: number, eligible: UnitEntry[]): [UnitEntry, number][] => {
   // common_interest: proportional to common interest, with an equal-split fallback
   // when the eligible units carry no common interest.
-  const ciSum = eligible.reduce((sum, unit) => sum + unit.commonInterest, 0);
-  if (ciSum <= 0) {
-    const share = amount / eligible.length;
-    for (const unit of eligible) {
-      result.set(unit.id, share);
-    }
-    return result;
+  const ciSum = eligible.reduce((sum, { unit }) => sum + unit.commonInterest, 0);
+  if (rule.method === "equal_per_unit" || ciSum <= 0) {
+    return eligible.map((entry) => [entry, amount / eligible.length]);
   }
-  for (const unit of eligible) {
-    result.set(unit.id, amount * (unit.commonInterest / ciSum));
-  }
-  return result;
+  return eligible.map((entry) => [entry, amount * (entry.unit.commonInterest / ciSum)]);
 };
 
 export const computeCharges = (budget: Budget): ChargeResult => {
-  const excludedOwners = new Set(budget.owners.filter((owner) => owner.excluded).map((owner) => owner.id));
-  const payingUnits = budget.units.filter((unit) => !excludedOwners.has(unit.ownerId));
   const policyById = new Map(budget.policies.map((policy) => [policy.id, policy]));
   const inflationFactor = 1 + budget.adjustments.inflationPct / 100;
   const reserveFactor = budget.adjustments.reservePct / 100;
   const offsetByType = new Map((budget.adjustments.offsets ?? []).map((offset) => [offset.unitType, offset.pct]));
 
-  const charges = new Map<string, UnitCharge>(
-    budget.units.map((unit) => {
-      const owner = budget.owners.find((candidate) => candidate.id === unit.ownerId);
-      return [
-        unit.id,
-        {
-          unitId: unit.id,
-          label: unit.label,
-          type: unit.type,
-          ownerId: unit.ownerId,
-          excluded: Boolean(owner?.excluded),
-          byExpense: {},
-          byCategory: {},
-          base: 0,
-          offset: 0,
-          income: 0,
-          reserve: 0,
-          total: 0,
-          monthly: 0,
-        },
-      ];
-    }),
-  );
+  const entries: UnitEntry[] = budget.units.map((unit) => {
+    const owner = budget.owners.find((candidate) => candidate.id === unit.ownerId);
+    return {
+      unit,
+      charge: {
+        unitId: unit.id,
+        label: unit.label,
+        type: unit.type,
+        ownerId: unit.ownerId,
+        excluded: Boolean(owner?.excluded),
+        byExpense: {},
+        byCategory: {},
+        base: 0,
+        offset: 0,
+        income: 0,
+        reserve: 0,
+        total: 0,
+        monthly: 0,
+      },
+    };
+  });
+  const charges = entries.map(({ charge }) => charge);
+  const payingEntries = entries.filter(({ charge }) => !charge.excluded);
 
   let unallocated = 0;
   const warnings: string[] = [];
@@ -111,18 +91,17 @@ export const computeCharges = (budget: Budget): ChargeResult => {
 
     for (const rule of policy.rules) {
       const ruleAmount = effective * (rule.weight / 100);
-      const eligible = payingUnits.filter((unit) => rule.unitTypes.includes(unit.type));
+      const eligible = payingEntries.filter(({ unit }) => rule.unitTypes.includes(unit.type));
       if (eligible.length === 0) {
         unallocated += ruleAmount;
         warnings.push(`Expense "${expense.name}" has a rule with no eligible units; ${ruleAmount} left unallocated.`);
         continue;
       }
+      if (ruleAmount === 0) {
+        continue;
+      }
 
-      for (const [unitId, amount] of splitRule(rule, ruleAmount, eligible)) {
-        const charge = charges.get(unitId);
-        if (!charge) {
-          continue;
-        }
+      for (const [{ charge }, amount] of splitRule(rule, ruleAmount, eligible)) {
         charge.byExpense[expense.id] = (charge.byExpense[expense.id] ?? 0) + amount;
         charge.byCategory[expense.category] = (charge.byCategory[expense.category] ?? 0) + amount;
         charge.base += amount;
@@ -132,9 +111,8 @@ export const computeCharges = (budget: Budget): ChargeResult => {
 
   // Offsets are a zero-sum rebalance: an affected unit's discount/surcharge is moved
   // onto the unaffected units (by common interest), so the building's total is unchanged.
-  const ciByUnit = new Map(budget.units.map((unit) => [unit.id, unit.commonInterest]));
   let rebalancePool = 0;
-  for (const charge of charges.values()) {
+  for (const charge of charges) {
     if (charge.excluded) {
       continue;
     }
@@ -146,11 +124,11 @@ export const computeCharges = (budget: Budget): ChargeResult => {
     rebalancePool -= charge.offset;
   }
 
-  const recipients = [...charges.values()].filter((charge) => !charge.excluded && !offsetByType.has(charge.type));
+  const recipients = payingEntries.filter(({ charge }) => !offsetByType.has(charge.type));
   if (recipients.length > 0 && Math.abs(rebalancePool) > 0) {
-    const ciSum = recipients.reduce((sum, charge) => sum + (ciByUnit.get(charge.unitId) ?? 0), 0);
-    for (const charge of recipients) {
-      const share = ciSum > 0 ? (ciByUnit.get(charge.unitId) ?? 0) / ciSum : 1 / recipients.length;
+    const ciSum = recipients.reduce((sum, { unit }) => sum + unit.commonInterest, 0);
+    for (const { unit, charge } of recipients) {
+      const share = ciSum > 0 ? unit.commonInterest / ciSum : 1 / recipients.length;
       charge.offset += rebalancePool * share;
     }
   } else if (Math.abs(rebalancePool) > 0.01) {
@@ -158,7 +136,7 @@ export const computeCharges = (budget: Budget): ChargeResult => {
   }
 
   // Non-common-charge income reduces the total to collect, spread proportional to each unit's base.
-  const basePool = [...charges.values()].reduce((sum, charge) => sum + charge.base, 0);
+  const basePool = charges.reduce((sum, charge) => sum + charge.base, 0);
   const incomeFactor = basePool > 0 ? (budget.adjustments.incomeOffset ?? 0) / basePool : 0;
 
   const byCategory: Record<string, number> = {};
@@ -168,7 +146,7 @@ export const computeCharges = (budget: Budget): ChargeResult => {
   let totalIncome = 0;
   let totalReserve = 0;
 
-  for (const charge of charges.values()) {
+  for (const charge of charges) {
     charge.income = -charge.base * incomeFactor;
     const net = charge.base + charge.offset + charge.income;
     charge.reserve = net * reserveFactor;
@@ -198,7 +176,7 @@ export const computeCharges = (budget: Budget): ChargeResult => {
 
   const total = totalBase + totalOffset + totalIncome + totalReserve;
   return {
-    perUnit: [...charges.values()],
+    perUnit: charges,
     perOwner,
     byCategory,
     totals: { base: totalBase, offset: totalOffset, income: totalIncome, reserve: totalReserve, total, monthly: total / 12 },
