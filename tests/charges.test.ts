@@ -1,3 +1,4 @@
+import { compressToEncodedURIComponent } from "lz-string";
 import { describe, expect, it } from "vitest";
 import { computeCharges } from "../lib/allocate";
 import { DEFAULT_BUDGET, makeId, normalizeBudget, validateBudget } from "../lib/budget";
@@ -175,6 +176,15 @@ describe("computeCharges adjustments", () => {
     expect(result.warnings.some((w) => w.includes("could not be rebalanced"))).toBe(true);
   });
 
+  it("rebalances equally when the receiving units carry no common interest", () => {
+    const budget = makeBudget({
+      units: [unit("c1", "commercial", 100, "o1"), unit("r1", "residential", 0, "o1"), unit("r2", "residential", 0, "o1")],
+      adjustments: { inflationPct: 0, reservePct: 0, offsets: [{ unitType: "commercial", pct: -10 }] },
+    });
+    expect(chargeFor(budget, "r1").total).toBeCloseTo(5);
+    expect(chargeFor(budget, "r2").total).toBeCloseTo(5);
+  });
+
   it("subtracts non-common-charge income proportional to base", () => {
     const budget = makeBudget({
       units: [unit("u1", "residential", 50, "o1"), unit("u2", "commercial", 50, "o1")],
@@ -214,11 +224,28 @@ describe("computeCharges edge cases and totals", () => {
     expect(result.unallocated).toBeCloseTo(100);
   });
 
+  it("reports unallocated money when an expense has no policy", () => {
+    const budget = makeBudget({
+      expenses: [{ id: "e", name: "orphan", category: "general", amount: 100, policyId: "" }],
+    });
+    const result = computeCharges(budget);
+    expect(result.unallocated).toBeCloseTo(100);
+  });
+
+  it("charges nothing to an owner without units", () => {
+    const budget = makeBudget({ owners: [owner("o1"), owner("o2")] });
+    const result = computeCharges(budget);
+    expect(result.perOwner.find((entry) => entry.ownerId === "o2")?.total).toBe(0);
+  });
+
   it("handles a zero-amount expense without charging anyone", () => {
     const budget = makeBudget({
       expenses: [{ id: "e", name: "free", category: "general", amount: 0, policyId: "p" }],
     });
-    expect(chargeFor(budget, "u1").total).toBeCloseTo(0);
+    const charge = chargeFor(budget, "u1");
+    expect(charge.total).toBeCloseTo(0);
+    expect(charge.byExpense).toEqual({});
+    expect(charge.byCategory).toEqual({});
   });
 
   it("aggregates per owner, per category, monthly, and grand totals", () => {
@@ -320,6 +347,24 @@ describe("normalizeBudget", () => {
     expect(budget.adjustments.inflationPct).toBe(3);
     expect(budget.adjustments.offsets).toEqual([{ unitType: "commercial", pct: -5 }]);
   });
+
+  it("fills defaults for null entries and drops invalid unit types", () => {
+    const budget = normalizeBudget({
+      owners: [null],
+      units: [null],
+      policies: [null, { rules: [null] }],
+      expenses: [null],
+      unitTypes: [null, "", { name: "storage", classification: "bogus" }],
+      adjustments: { offsets: [null] },
+    });
+    expect(budget.owners[0]?.name).toBe("Owner 1");
+    expect(budget.units[0]?.label).toBe("Unit 1");
+    expect(budget.policies.map((policy) => policy.name)).toEqual(["Policy 1", "Policy 2"]);
+    expect(budget.policies[1]?.rules).toEqual([{ unitTypes: [], weight: 0, method: "common_interest" }]);
+    expect(budget.expenses[0]?.name).toBe("Expense 1");
+    expect(budget.unitTypes).toEqual([{ name: "storage", classification: "primary" }]);
+    expect(budget.adjustments.offsets).toEqual([{ unitType: "", pct: 0 }]);
+  });
 });
 
 describe("serialize round-trips", () => {
@@ -365,6 +410,28 @@ describe("serialize round-trips", () => {
     expect(parseBudgetUrl("")).toBeNull();
     expect(parseBudgetUrl("!!!not-valid!!!")).toBeNull();
     expect(parseBudgetJson("not json")).toBeNull();
+    expect(parseBudgetUrl(compressToEncodedURIComponent("not json"))).toBeNull();
+    expect(parseBudgetUrl(compressToEncodedURIComponent("[]"))).toBeNull();
+  });
+
+  it("decodes legacy unit types and out-of-range references from a packed URL", () => {
+    const packed = [
+      ["legacy", ["storage", 1]],
+      ["general"],
+      [["Alice", 0, 100]],
+      [["1A", 9, 50, 9]],
+      [["standard", [[[0], 100, 9]]]],
+      [["exp", 9, 10, 9]],
+      [0, 0, [], 0],
+    ];
+    const parsed = parseBudgetUrl(compressToEncodedURIComponent(JSON.stringify(packed))) as Budget;
+    expect(parsed.unitTypes).toEqual([
+      { name: "legacy", classification: "primary" },
+      { name: "storage", classification: "ancillary" },
+    ]);
+    expect(parsed.units[0]).toMatchObject({ type: "", ownerId: "" });
+    expect(parsed.policies[0]?.rules[0]?.method).toBe("common_interest");
+    expect(parsed.expenses[0]).toMatchObject({ category: "", policyId: "" });
   });
 
   it("preserves orphan references and offsets through the packed encoding", () => {
@@ -460,6 +527,14 @@ describe("batch parsing", () => {
       { name: "Lobby", classification: "ancillary" },
     ]);
     expect(skipped.map((entry) => entry.reason)).toEqual(['unknown classification "deluxe"']);
+  });
+
+  it("skips unit type lines without a name", () => {
+    expect(parseUnitTypeLines(", primary").skipped).toEqual([{ line: ", primary", reason: "expected: name, classification" }]);
+  });
+
+  it("defaults an unparseable owner amount to zero", () => {
+    expect(parseOwnerLines("Alice, abc").owners[0]?.currentMonthly).toBe(0);
   });
 });
 

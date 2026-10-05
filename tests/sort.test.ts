@@ -55,6 +55,11 @@ describe("compareOwners / compareUnitTypes / compareExpenses", () => {
     ]);
     const byClass = [...types].sort((a, b) => compareUnitTypes(a, b, "classification", "asc")).map((x) => x.classification);
     expect(byClass).toEqual(["ancillary", "primary", "primary"]);
+    expect([...types].sort((a, b) => compareUnitTypes(a, b, "name", "desc")).map((x) => x.name)).toEqual([
+      "Storage",
+      "Residential",
+      "Commercial",
+    ]);
   });
 
   it("compareExpenses by amount and split (policy name)", () => {
@@ -67,6 +72,16 @@ describe("compareOwners / compareUnitTypes / compareExpenses", () => {
     expect([...expenses].sort((a, b) => compareExpenses(a, b, "split", "asc", policyName)).map((x) => x.name)).toEqual([
       "Water",
       "Insurance",
+      "Heat",
+    ]);
+    expect([...expenses].sort((a, b) => compareExpenses(a, b, "name", "desc", policyName)).map((x) => x.name)).toEqual([
+      "Water",
+      "Insurance",
+      "Heat",
+    ]);
+    expect([...expenses].sort((a, b) => compareExpenses(a, b, "split", "asc", new Map())).map((x) => x.name)).toEqual([
+      "Insurance",
+      "Water",
       "Heat",
     ]);
   });
@@ -88,7 +103,8 @@ describe("parseSortParam", () => {
   });
 
   it("ignores unknown keys and bad directions", () => {
-    const raw = "u:owner:asc,u:label:sideways,o:nope:asc";
+    const raw =
+      "u:owner:asc,u:label:sideways,o:nope:asc,o:name:sideways,ut:nope:asc,ut:name:sideways,e:c:nope:asc,e:c:name:sideways,x:name:asc,o:name";
     expect(parseSortParam(raw)).toEqual({ owner: null, unit: null, unitType: null, expenses: {} });
   });
 
@@ -98,9 +114,13 @@ describe("parseSortParam", () => {
   });
 
   it("round-trips via serializeSortParam", () => {
-    const raw = "o:name:asc,u:label:desc,ut:name:asc,e:General:amount:desc";
+    const raw = "o:currentMonthly:desc,u:label:desc,ut:name:desc,e:General:amount:desc,e:Other:split:asc";
     const parsed = parseSortParam(raw);
     expect(serializeSortParam(parsed.owner, parsed.unit, parsed.unitType, parsed.expenses)).toBe(raw);
+  });
+
+  it("serializes nothing when no sort is active", () => {
+    expect(serializeSortParam(null, null, null, {})).toBe("");
   });
 });
 
