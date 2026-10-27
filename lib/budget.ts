@@ -235,6 +235,9 @@ export const normalizeBudget = (value: unknown): Budget => {
   };
 };
 
+// True when no rule both carries weight and targets a unit type, so the policy allocates nothing.
+export const isEmptyPolicy = (policy: Policy): boolean => policy.rules.every((rule) => rule.weight === 0 || rule.unitTypes.length === 0);
+
 const approxEqual = (a: number, b: number, epsilon = 0.01) => Math.abs(a - b) <= epsilon;
 
 // Returns human-readable warnings about a budget; an empty array means it is consistent.
@@ -262,13 +265,16 @@ export const validateBudget = (budget: Budget): string[] => {
     }
   }
 
-  const policyIds = new Set(budget.policies.map((policy) => policy.id));
+  const policyById = new Map(budget.policies.map((policy) => [policy.id, policy]));
   const ownerIds = new Set(budget.owners.map((owner) => owner.id));
   const unitTypeSet = new Set(budget.unitTypes.map((type) => type.name));
 
   for (const expense of budget.expenses) {
-    if (!expense.policyId || !policyIds.has(expense.policyId)) {
+    const policy = policyById.get(expense.policyId);
+    if (!policy) {
       warnings.push(`Expense "${expense.name}" has no valid policy.`);
+    } else if (isEmptyPolicy(policy)) {
+      warnings.push(`Expense "${expense.name}" uses policy "${policy.name}", which allocates to no unit types.`);
     }
     if (expense.amount === 0) {
       warnings.push(`Expense "${expense.name}" is $0.`);
