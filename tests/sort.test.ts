@@ -236,8 +236,9 @@ describe("sortOwnersByPrimaryUnit", () => {
       u("6", "CU1", "Commercial", 1, "cu1"),
       u("7", "S2", "Storage", 1, "storage"),
       u("8", "A1", "Storage", 1, "res2a"),
+      u("9", "CU0", "Commercial", 1),
     ];
-    const owners = ["none", "storage", "res10a", "res2b", "cu2", "res2a", "cu1"].map((ownerId) => ({ ownerId }));
+    const owners = ["none", "storage", "res10a", "none2", "res2b", "cu2", "res2a", "cu1"].map((ownerId) => ({ ownerId }));
     expect(sortOwnersByPrimaryUnit(owners, units, classByType).map((owner) => owner.ownerId)).toEqual([
       "cu1",
       "cu2",
@@ -246,6 +247,7 @@ describe("sortOwnersByPrimaryUnit", () => {
       "res10a",
       "storage",
       "none",
+      "none2",
     ]);
   });
 });
