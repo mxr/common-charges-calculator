@@ -91,7 +91,9 @@ export const computeCharges = (budget: Budget): ChargeResult => {
 
     for (const rule of policy.rules) {
       const ruleAmount = effective * (rule.weight / 100);
-      const eligible = payingEntries.filter(({ unit }) => rule.unitTypes.includes(unit.type));
+      const eligible = payingEntries.filter(
+        ({ unit }) => rule.unitTypes.includes(unit.type) && (rule.tags.length === 0 || rule.tags.some((tag) => unit.tags.includes(tag))),
+      );
       if (eligible.length === 0) {
         unallocated += ruleAmount;
         warnings.push(`Expense "${expense.name}" has a rule with no eligible units; ${ruleAmount} left unallocated.`);

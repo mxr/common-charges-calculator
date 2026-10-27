@@ -9,12 +9,13 @@ import type { Budget } from "../lib/types";
 
 const owner = (id: string, excluded = false): Budget["owners"][number] => ({ id, name: id, excluded, currentMonthly: 0 });
 
-const unit = (id: string, type: string, commonInterest: number, ownerId: string): Budget["units"][number] => ({
+const unit = (id: string, type: string, commonInterest: number, ownerId: string, tags: string[] = []): Budget["units"][number] => ({
   id,
   label: id,
   type,
   commonInterest,
   ownerId,
+  tags,
 });
 
 const ut = (name: string, classification: Budget["unitTypes"][number]["classification"] = "primary"): Budget["unitTypes"][number] => ({
@@ -27,7 +28,9 @@ const makeBudget = (overrides: Partial<Budget>): Budget => ({
   units: [unit("u1", "residential", 100, "o1")],
   unitTypes: [ut("residential"), ut("commercial")],
   categories: ["general"],
-  policies: [{ id: "p", name: "standard", rules: [{ unitTypes: ["residential", "commercial"], weight: 100, method: "common_interest" }] }],
+  policies: [
+    { id: "p", name: "standard", rules: [{ unitTypes: ["residential", "commercial"], tags: [], weight: 100, method: "common_interest" }] },
+  ],
   expenses: [{ id: "e", name: "exp", category: "general", amount: 100, policyId: "p" }],
   adjustments: { inflationPct: 0, reservePct: 0 },
   ...overrides,
@@ -55,7 +58,7 @@ describe("computeCharges allocation methods", () => {
     const budget = makeBudget({
       units: [unit("u1", "residential", 10, "o1"), unit("u2", "residential", 80, "o1"), unit("u3", "residential", 10, "o1")],
       expenses: [{ id: "e", name: "fiber", category: "general", amount: 90, policyId: "p" }],
-      policies: [{ id: "p", name: "per-unit", rules: [{ unitTypes: ["residential"], weight: 100, method: "equal_per_unit" }] }],
+      policies: [{ id: "p", name: "per-unit", rules: [{ unitTypes: ["residential"], tags: [], weight: 100, method: "equal_per_unit" }] }],
     });
     for (const id of ["u1", "u2", "u3"]) {
       expect(chargeFor(budget, id).total).toBeCloseTo(30);
@@ -75,7 +78,9 @@ describe("computeCharges policies", () => {
   it("excludes commercial units (elevator)", () => {
     const budget = makeBudget({
       units: [unit("u1", "residential", 60, "o1"), unit("u2", "commercial", 40, "o1")],
-      policies: [{ id: "p", name: "no-commercial", rules: [{ unitTypes: ["residential"], weight: 100, method: "common_interest" }] }],
+      policies: [
+        { id: "p", name: "no-commercial", rules: [{ unitTypes: ["residential"], tags: [], weight: 100, method: "common_interest" }] },
+      ],
     });
     expect(chargeFor(budget, "u1").total).toBeCloseTo(100);
     expect(chargeFor(budget, "u2").total).toBeCloseTo(0);
@@ -90,8 +95,8 @@ describe("computeCharges policies", () => {
           id: "p",
           name: "super",
           rules: [
-            { unitTypes: ["commercial"], weight: 5, method: "common_interest" },
-            { unitTypes: ["residential"], weight: 95, method: "common_interest" },
+            { unitTypes: ["commercial"], tags: [], weight: 5, method: "common_interest" },
+            { unitTypes: ["residential"], tags: [], weight: 95, method: "common_interest" },
           ],
         },
       ],
@@ -99,6 +104,35 @@ describe("computeCharges policies", () => {
     expect(chargeFor(budget, "comm").total).toBeCloseTo(50);
     expect(chargeFor(budget, "res1").total).toBeCloseTo(950 * (50 / 80));
     expect(chargeFor(budget, "res2").total).toBeCloseTo(950 * (30 / 80));
+  });
+
+  it.each([
+    { id: "no rule tags reaches every unit of the type", tags: [], expected: { hyd1: 20, hyd2: 30, plain: 50 } },
+    { id: "rule tags narrow to units with any listed tag", tags: ["hydronic"], expected: { hyd1: 40, hyd2: 60, plain: 0 } },
+    { id: "unmatched rule tags leave nothing eligible", tags: ["solar"], expected: { hyd1: 0, hyd2: 0, plain: 0 } },
+  ])("$id", ({ tags, expected }) => {
+    const budget = makeBudget({
+      units: [
+        unit("hyd1", "residential", 20, "o1", ["hydronic"]),
+        unit("hyd2", "residential", 30, "o1", ["hydronic", "corner"]),
+        unit("plain", "residential", 50, "o1"),
+      ],
+      policies: [{ id: "p", name: "hydronic", rules: [{ unitTypes: ["residential"], tags, weight: 100, method: "common_interest" }] }],
+    });
+    for (const [unitId, total] of Object.entries(expected)) {
+      expect(chargeFor(budget, unitId).total).toBeCloseTo(total);
+    }
+  });
+
+  it("requires a matching unit type even when the tag matches", () => {
+    const budget = makeBudget({
+      units: [unit("res", "residential", 50, "o1", ["hydronic"]), unit("comm", "commercial", 50, "o1", ["hydronic"])],
+      policies: [
+        { id: "p", name: "hydronic", rules: [{ unitTypes: ["residential"], tags: ["hydronic"], weight: 100, method: "common_interest" }] },
+      ],
+    });
+    expect(chargeFor(budget, "res").total).toBeCloseTo(100);
+    expect(chargeFor(budget, "comm").total).toBeCloseTo(0);
   });
 });
 
@@ -209,7 +243,7 @@ describe("computeCharges adjustments", () => {
 describe("computeCharges edge cases and totals", () => {
   it("reports unallocated money when a rule has no eligible units", () => {
     const budget = makeBudget({
-      policies: [{ id: "p", name: "ghost", rules: [{ unitTypes: ["penthouse"], weight: 100, method: "common_interest" }] }],
+      policies: [{ id: "p", name: "ghost", rules: [{ unitTypes: ["penthouse"], tags: [], weight: 100, method: "common_interest" }] }],
     });
     const result = computeCharges(budget);
     expect(result.unallocated).toBeCloseTo(100);
@@ -272,7 +306,7 @@ describe("validateBudget", () => {
 
   it("warns when policy weights do not sum to 100", () => {
     const budget = makeBudget({
-      policies: [{ id: "p", name: "bad", rules: [{ unitTypes: [], weight: 50, method: "common_interest" }] }],
+      policies: [{ id: "p", name: "bad", rules: [{ unitTypes: [], tags: [], weight: 50, method: "common_interest" }] }],
     });
     expect(validateBudget(budget).some((w) => w.includes("rule weights"))).toBe(true);
   });
@@ -300,6 +334,15 @@ describe("validateBudget", () => {
     const warnings = validateBudget(budget);
     expect(warnings.some((w) => w.includes('Unit type "commercial" is not used'))).toBe(true);
     expect(warnings.some((w) => w.includes('Category "extra" is not used'))).toBe(true);
+  });
+
+  it("warns when a rule references a tag no unit has", () => {
+    const budget = makeBudget({
+      policies: [
+        { id: "p", name: "solar", rules: [{ unitTypes: ["residential"], tags: ["solar"], weight: 100, method: "common_interest" }] },
+      ],
+    });
+    expect(validateBudget(budget)).toContain('Policy "solar" references tag "solar", which no unit has.');
   });
 
   it("warns on missing policy and dangling owner and type references", () => {
@@ -348,6 +391,15 @@ describe("normalizeBudget", () => {
     expect(budget.adjustments.offsets).toEqual([{ unitType: "commercial", pct: -5 }]);
   });
 
+  it("trims, drops blank, and de-duplicates tags", () => {
+    const budget = normalizeBudget({
+      units: [{ tags: [" hydronic ", "", "hydronic", 7, "corner"] }, {}],
+      policies: [{ rules: [{ tags: ["corner", " corner"] }] }],
+    });
+    expect(budget.units.map((u) => u.tags)).toEqual([["hydronic", "corner"], []]);
+    expect(budget.policies[0]?.rules[0]?.tags).toEqual(["corner"]);
+  });
+
   it("fills defaults for null entries and drops invalid unit types", () => {
     const budget = normalizeBudget({
       owners: [null],
@@ -360,7 +412,7 @@ describe("normalizeBudget", () => {
     expect(budget.owners[0]?.name).toBe("Owner 1");
     expect(budget.units[0]?.label).toBe("Unit 1");
     expect(budget.policies.map((policy) => policy.name)).toEqual(["Policy 1", "Policy 2"]);
-    expect(budget.policies[1]?.rules).toEqual([{ unitTypes: [], weight: 0, method: "common_interest" }]);
+    expect(budget.policies[1]?.rules).toEqual([{ unitTypes: [], tags: [], weight: 0, method: "common_interest" }]);
     expect(budget.expenses[0]?.name).toBe("Expense 1");
     expect(budget.unitTypes).toEqual([{ name: "storage", classification: "primary" }]);
     expect(budget.adjustments.offsets).toEqual([{ unitType: "", pct: 0 }]);
@@ -429,9 +481,22 @@ describe("serialize round-trips", () => {
       { name: "legacy", classification: "primary" },
       { name: "storage", classification: "ancillary" },
     ]);
-    expect(parsed.units[0]).toMatchObject({ type: "", ownerId: "" });
+    expect(parsed.units[0]).toMatchObject({ type: "", ownerId: "", tags: [] });
+    expect(parsed.policies[0]?.rules[0]?.tags).toEqual([]);
     expect(parsed.policies[0]?.rules[0]?.method).toBe("common_interest");
     expect(parsed.expenses[0]).toMatchObject({ category: "", policyId: "" });
+  });
+
+  it("preserves unit and rule tags through the packed encoding", () => {
+    const budget = makeBudget({
+      units: [unit("u1", "residential", 100, "o1", ["hydronic", "corner"])],
+      policies: [
+        { id: "p", name: "hydronic", rules: [{ unitTypes: ["residential"], tags: ["hydronic"], weight: 100, method: "common_interest" }] },
+      ],
+    });
+    const parsed = parseBudgetUrl(serializeBudgetUrl(budget)) as Budget;
+    expect(parsed.units[0]?.tags).toEqual(["hydronic", "corner"]);
+    expect(parsed.policies[0]?.rules[0]?.tags).toEqual(["hydronic"]);
   });
 
   it("preserves orphan references and offsets through the packed encoding", () => {
@@ -442,7 +507,7 @@ describe("serialize round-trips", () => {
       categories: ["general"],
       owners: [owner("o1")],
       units: [unit("u1", "commercial", 100, "ghost")],
-      policies: [{ id: "p", name: "standard", rules: [{ unitTypes: ["commercial"], weight: 100, method: "common_interest" }] }],
+      policies: [{ id: "p", name: "standard", rules: [{ unitTypes: ["commercial"], tags: [], weight: 100, method: "common_interest" }] }],
       expenses: [{ id: "e", name: "exp", category: "misc", amount: 100, policyId: "p2" }],
       adjustments: { inflationPct: 5, reservePct: 10, offsets: [{ unitType: "commercial", pct: -5 }], incomeOffset: 200 },
     });
@@ -495,7 +560,7 @@ describe("batch parsing", () => {
   it("parses valid unit lines and skips bad ones", () => {
     const owners = [owner("owner-1"), { id: "owner-2", name: "Maple Holdings LLC", excluded: false, currentMonthly: 0 }];
     const text = [
-      "1A,\tresidential ,  30% , owner-1",
+      "1A,\tresidential ,  30% , owner-1, hydronic, corner",
       "CU1\tCOMMERCIAL\t20\tmaple holdings llc",
       "",
       "bad line",
@@ -504,9 +569,9 @@ describe("batch parsing", () => {
       "S1, storage, 5, Ghost",
     ].join("\n");
     const { units, skipped } = parseUnitLines(text, ["Residential", "Commercial", "Garage", "Storage"], owners);
-    expect(units.map((unit) => [unit.label, unit.type, unit.commonInterest, unit.ownerId])).toEqual([
-      ["1A", "Residential", 30, "owner-1"],
-      ["CU1", "Commercial", 20, "owner-2"],
+    expect(units.map((unit) => [unit.label, unit.type, unit.commonInterest, unit.ownerId, unit.tags])).toEqual([
+      ["1A", "Residential", 30, "owner-1", ["hydronic", "corner"]],
+      ["CU1", "Commercial", 20, "owner-2", []],
     ]);
     expect(skipped.map((entry) => entry.reason)).toEqual([
       "expected: label, type, common interest, owner",

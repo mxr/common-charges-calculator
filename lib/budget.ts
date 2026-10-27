@@ -40,19 +40,19 @@ export const DEFAULT_BUDGET: Budget = {
   // Several units per type share the same common interest, and types mix owners, so sorting by
   // common interest then label, or owner then number, shows the earlier sort surviving as ties break.
   units: [
-    { id: "unit-1a", label: "1A", type: "Residential", commonInterest: 12, ownerId: "owner-alice" },
-    { id: "unit-1b", label: "1B", type: "Residential", commonInterest: 8, ownerId: "owner-bob" },
-    { id: "unit-2a", label: "2A", type: "Residential", commonInterest: 12, ownerId: "owner-carol" },
-    { id: "unit-2b", label: "2B", type: "Residential", commonInterest: 8, ownerId: "owner-alice" },
-    { id: "unit-3n", label: "3N", type: "Residential", commonInterest: 13, ownerId: "owner-bob" },
-    { id: "unit-3s", label: "3S", type: "Residential", commonInterest: 9, ownerId: "owner-llc" },
-    { id: "unit-cu1", label: "CU1", type: "Commercial", commonInterest: 9, ownerId: "owner-llc" },
-    { id: "unit-cu2", label: "CU2", type: "Commercial", commonInterest: 9, ownerId: "owner-carol" },
-    { id: "unit-s1", label: "S1", type: "Storage", commonInterest: 2, ownerId: "owner-board" },
-    { id: "unit-s2", label: "S2", type: "Storage", commonInterest: 2, ownerId: "owner-alice" },
-    { id: "unit-g1", label: "G1", type: "Garage", commonInterest: 3, ownerId: "owner-bob" },
-    { id: "unit-g2", label: "G2", type: "Garage", commonInterest: 3, ownerId: "owner-carol" },
-    { id: "unit-c1", label: "C1", type: "Cabana", commonInterest: 10, ownerId: "owner-bob" },
+    { id: "unit-1a", label: "1A", type: "Residential", commonInterest: 12, ownerId: "owner-alice", tags: ["Hydronic"] },
+    { id: "unit-1b", label: "1B", type: "Residential", commonInterest: 8, ownerId: "owner-bob", tags: ["Hydronic"] },
+    { id: "unit-2a", label: "2A", type: "Residential", commonInterest: 12, ownerId: "owner-carol", tags: ["Hydronic"] },
+    { id: "unit-2b", label: "2B", type: "Residential", commonInterest: 8, ownerId: "owner-alice", tags: ["Hydronic"] },
+    { id: "unit-3n", label: "3N", type: "Residential", commonInterest: 13, ownerId: "owner-bob", tags: [] },
+    { id: "unit-3s", label: "3S", type: "Residential", commonInterest: 9, ownerId: "owner-llc", tags: [] },
+    { id: "unit-cu1", label: "CU1", type: "Commercial", commonInterest: 9, ownerId: "owner-llc", tags: [] },
+    { id: "unit-cu2", label: "CU2", type: "Commercial", commonInterest: 9, ownerId: "owner-carol", tags: [] },
+    { id: "unit-s1", label: "S1", type: "Storage", commonInterest: 2, ownerId: "owner-board", tags: [] },
+    { id: "unit-s2", label: "S2", type: "Storage", commonInterest: 2, ownerId: "owner-alice", tags: [] },
+    { id: "unit-g1", label: "G1", type: "Garage", commonInterest: 3, ownerId: "owner-bob", tags: [] },
+    { id: "unit-g2", label: "G2", type: "Garage", commonInterest: 3, ownerId: "owner-carol", tags: [] },
+    { id: "unit-c1", label: "C1", type: "Cabana", commonInterest: 10, ownerId: "owner-bob", tags: [] },
   ],
   unitTypes: [...DEFAULT_UNIT_TYPES],
   categories: [...DEFAULT_CATEGORIES],
@@ -60,30 +60,37 @@ export const DEFAULT_BUDGET: Budget = {
     {
       id: "policy-standard",
       name: "Standard (by common interest)",
-      rules: [{ unitTypes: ["Residential", "Commercial", "Storage", "Garage", "Cabana"], weight: 100, method: "common_interest" }],
+      rules: [
+        { unitTypes: ["Residential", "Commercial", "Storage", "Garage", "Cabana"], tags: [], weight: 100, method: "common_interest" },
+      ],
     },
     {
       id: "policy-no-commercial",
       name: "Exclude commercial",
-      rules: [{ unitTypes: ["Residential", "Storage", "Garage", "Cabana"], weight: 100, method: "common_interest" }],
+      rules: [{ unitTypes: ["Residential", "Storage", "Garage", "Cabana"], tags: [], weight: 100, method: "common_interest" }],
     },
     {
       id: "policy-per-residential",
       name: "Equal per residential unit",
-      rules: [{ unitTypes: ["Residential"], weight: 100, method: "equal_per_unit" }],
+      rules: [{ unitTypes: ["Residential"], tags: [], weight: 100, method: "equal_per_unit" }],
     },
     {
       id: "policy-super",
       name: "5% commercial / 95% rest",
       rules: [
-        { unitTypes: ["Commercial"], weight: 5, method: "common_interest" },
-        { unitTypes: ["Residential", "Storage", "Garage", "Cabana"], weight: 95, method: "common_interest" },
+        { unitTypes: ["Commercial"], tags: [], weight: 5, method: "common_interest" },
+        { unitTypes: ["Residential", "Storage", "Garage", "Cabana"], tags: [], weight: 95, method: "common_interest" },
       ],
     },
     {
       id: "policy-parking",
       name: "Garage & storage only",
-      rules: [{ unitTypes: ["Garage", "Storage"], weight: 100, method: "equal_per_unit" }],
+      rules: [{ unitTypes: ["Garage", "Storage"], tags: [], weight: 100, method: "equal_per_unit" }],
+    },
+    {
+      id: "policy-hydronic",
+      name: "Hydronic units only",
+      rules: [{ unitTypes: ["Residential"], tags: ["Hydronic"], weight: 100, method: "common_interest" }],
     },
   ],
   // Within each category several line items share an amount or a split policy, so sorting by amount
@@ -95,6 +102,7 @@ export const DEFAULT_BUDGET: Budget = {
     { id: "exp-water", name: "Water & sewer", category: "Utilities", amount: 1800, policyId: "policy-standard" },
     { id: "exp-electric", name: "Electric (common)", category: "Utilities", amount: 1800, policyId: "policy-super" },
     { id: "exp-gas", name: "Gas", category: "Utilities", amount: 900, policyId: "policy-standard" },
+    { id: "exp-hydronic", name: "Hydronic heating", category: "Utilities", amount: 1200, policyId: "policy-hydronic" },
     { id: "exp-fiber", name: "Fiber internet", category: "Utilities", amount: 900, policyId: "policy-per-residential" },
     { id: "exp-elevator", name: "Elevator maintenance", category: "Maintenance", amount: 1400, policyId: "policy-no-commercial" },
     { id: "exp-roof", name: "Roof repair", category: "Maintenance", amount: 1400, policyId: "policy-standard" },
@@ -116,6 +124,15 @@ const asNumber = (value: unknown, fallback = 0) => {
 
 const asStringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+
+// Trims, drops blanks, and de-duplicates freeform tags while keeping their first-seen order.
+export const normalizeTags = (value: unknown): string[] => [
+  ...new Set(
+    asStringArray(value)
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+  ),
+];
 
 const normalizeMethod = (value: unknown): AllocationMethod =>
   ALLOCATION_METHODS.includes(value as AllocationMethod) ? (value as AllocationMethod) : "common_interest";
@@ -140,6 +157,7 @@ const normalizeRule = (value: unknown): PolicyRule => {
   const raw = (value ?? {}) as Partial<Record<keyof PolicyRule, unknown>>;
   return {
     unitTypes: asStringArray(raw.unitTypes),
+    tags: normalizeTags(raw.tags),
     weight: asNumber(raw.weight),
     method: normalizeMethod(raw.method),
   };
@@ -151,7 +169,7 @@ const normalizePolicy = (value: unknown, index: number): Policy => {
   return {
     id: asString(raw.id) || makeId("policy"),
     name: asString(raw.name) || `Policy ${index + 1}`,
-    rules: rules.length > 0 ? rules : [{ unitTypes: [], weight: 100, method: "common_interest" }],
+    rules: rules.length > 0 ? rules : [{ unitTypes: [], tags: [], weight: 100, method: "common_interest" }],
   };
 };
 
@@ -173,6 +191,7 @@ const normalizeUnit = (value: unknown, index: number): Unit => {
     type: asString(raw.type),
     commonInterest: asNumber(raw.commonInterest),
     ownerId: asString(raw.ownerId),
+    tags: normalizeTags(raw.tags),
   };
 };
 
@@ -231,6 +250,15 @@ export const validateBudget = (budget: Budget): string[] => {
     const weightSum = policy.rules.reduce((sum, rule) => sum + rule.weight, 0);
     if (!approxEqual(weightSum, 100)) {
       warnings.push(`Policy "${policy.name}" rule weights sum to ${weightSum.toFixed(2)}%, expected 100%.`);
+    }
+  }
+
+  const usedTags = new Set(budget.units.flatMap((unit) => unit.tags));
+  for (const policy of budget.policies) {
+    for (const tag of new Set(policy.rules.flatMap((rule) => rule.tags))) {
+      if (!usedTags.has(tag)) {
+        warnings.push(`Policy "${policy.name}" references tag "${tag}", which no unit has.`);
+      }
     }
   }
 

@@ -3,7 +3,7 @@
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { computeCharges } from "../lib/allocate";
-import { DEFAULT_BUDGET, makeId, validateBudget } from "../lib/budget";
+import { DEFAULT_BUDGET, makeId, normalizeTags, validateBudget } from "../lib/budget";
 import { formatCurrency } from "../lib/format";
 import { parseOwnerLines, parseUnitLines, parseUnitTypeLines } from "../lib/parse";
 import { exportBudgetJson, parseBudgetJson, parseBudgetUrl, serializeBudgetUrl } from "../lib/serialize";
@@ -464,7 +464,7 @@ function HomeContent() {
 
   const renderUnitRow = (unit: Unit) => {
     return (
-      <div key={unit.id} className="grid gap-2 transition-opacity sm:grid-cols-[1.4fr_1.2fr_1fr_auto] sm:items-center">
+      <div key={unit.id} className="grid gap-2 transition-opacity sm:grid-cols-[1.2fr_1.2fr_0.9fr_1.4fr_auto] sm:items-center">
         <TextField
           className={field}
           value={unit.label}
@@ -492,6 +492,17 @@ function HomeContent() {
             patch((draft) => ({
               ...draft,
               units: draft.units.map((u) => (u.id === unit.id ? { ...u, commonInterest: next } : u)),
+            }))
+          }
+        />
+        <TextField
+          className={field}
+          placeholder="Tags"
+          value={unit.tags.join(", ")}
+          onChange={(next) =>
+            patch((draft) => ({
+              ...draft,
+              units: draft.units.map((u) => (u.id === unit.id ? { ...u, tags: normalizeTags(next.split(",")) } : u)),
             }))
           }
         />
@@ -533,6 +544,8 @@ function HomeContent() {
   const sortUnits = (units: Unit[]): Unit[] => applyOrder(units, unitOrder, (unit) => unit.id);
 
   const classByType = new Map(budget.unitTypes.map((type) => [type.name, type.classification]));
+  // Every tag in use, offered as rule filters in the policy editor.
+  const allTags = [...new Set(budget.units.flatMap((unit) => unit.tags))].sort((a, b) => a.localeCompare(b));
   const unitPasses = (unit: Unit) => passesUnitFilter(unit, classByType, unitFilter, unitTypeFilter);
   const typePasses = (type: UnitType) => passesTypeFilter(type, unitFilter, unitTypeFilter);
 
@@ -969,6 +982,7 @@ function HomeContent() {
                             type: draft.unitTypes[0]?.name ?? "",
                             commonInterest: 0,
                             ownerId: draft.owners[0]?.id ?? "",
+                            tags: [],
                           },
                         ],
                       }))
@@ -991,8 +1005,8 @@ function HomeContent() {
                     <span className={Math.abs(ciSum - 100) <= 0.01 ? "font-semibold text-[#3f7a52]" : "font-semibold text-[#b44b43]"}>
                       {formatCi(ciSum)}%
                     </span>{" "}
-                    (should be as close to 100% as possible). Columns: label, type, common interest %. Grouped by unit type. Edit owner
-                    assignments in the Assignments section below.
+                    (should be as close to 100% as possible). Columns: label, type, common interest %, tags (comma separated). Grouped by
+                    unit type. Edit owner assignments in the Assignments section below.
                     {Math.abs(ciSum - 100) > 0.01 ? (
                       <span className="font-semibold text-[#b44b43]"> Off from 100% - double-check the Unit definitions.</span>
                     ) : null}
@@ -1365,7 +1379,11 @@ function HomeContent() {
                       ...draft,
                       policies: [
                         ...draft.policies,
-                        { id: makeId("policy"), name: "New policy", rules: [{ unitTypes: [], weight: 100, method: "common_interest" }] },
+                        {
+                          id: makeId("policy"),
+                          name: "New policy",
+                          rules: [{ unitTypes: [], tags: [], weight: 100, method: "common_interest" }],
+                        },
                       ],
                     }))
                   }
@@ -1537,6 +1555,37 @@ function HomeContent() {
                                     {rule.unitTypes.length === 0 ? (
                                       <span className="text-xs italic text-[#b44b43]">select unit types</span>
                                     ) : null}
+                                    {[...new Set([...allTags, ...rule.tags])].map((tag) => (
+                                      <label key={tag} className="flex items-center gap-1 text-xs text-[#5b5148]">
+                                        <input
+                                          type="checkbox"
+                                          checked={rule.tags.includes(tag)}
+                                          onChange={(event) =>
+                                            patch((draft) => ({
+                                              ...draft,
+                                              policies: draft.policies.map((p) =>
+                                                p.id === policy.id
+                                                  ? {
+                                                      ...p,
+                                                      rules: p.rules.map((r, i) =>
+                                                        i === ruleIndex
+                                                          ? {
+                                                              ...r,
+                                                              tags: event.target.checked
+                                                                ? [...r.tags, tag]
+                                                                : r.tags.filter((item) => item !== tag),
+                                                            }
+                                                          : r,
+                                                      ),
+                                                    }
+                                                  : p,
+                                              ),
+                                            }))
+                                          }
+                                        />
+                                        <span className="rounded-full border border-[#e6d7c7] bg-white px-1.5">#{tag}</span>
+                                      </label>
+                                    ))}
                                   </div>
                                   {policy.rules.length > 1 ? (
                                     <button
@@ -1566,7 +1615,7 @@ function HomeContent() {
                                   ...draft,
                                   policies: draft.policies.map((p) =>
                                     p.id === policy.id
-                                      ? { ...p, rules: [...p.rules, { unitTypes: [], weight: 0, method: "common_interest" }] }
+                                      ? { ...p, rules: [...p.rules, { unitTypes: [], tags: [], weight: 0, method: "common_interest" }] }
                                       : p,
                                   ),
                                 }))
@@ -2202,7 +2251,7 @@ function BatchModal({
           {kind === "owner"
             ? "One owner per line: name, current monthly (comma or tab separated). The amount is optional and may have a $ prefix. Exclusion is not set here; toggle it afterwards."
             : kind === "unit"
-              ? "One unit per line: label, type, common interest, owner (comma or tab separated). Owner is matched by name to an existing owner."
+              ? "One unit per line: label, type, common interest, owner, then optional tags (comma or tab separated). Owner is matched by name to an existing owner."
               : "One unit type per line: name, classification (comma or tab separated). Classification is optional and defaults to Primary; use 'primary' or 'ancillary'."}
         </p>
         <textarea
@@ -2212,7 +2261,7 @@ function BatchModal({
             kind === "owner"
               ? "Alice, $1000\nBob, 900\nMaple Holdings LLC, $650"
               : kind === "unit"
-                ? "1A, residential, 30, Alice\nCU1, commercial, 20, Maple Holdings LLC"
+                ? "1A, residential, 30, Alice, Hydronic\nCU1, commercial, 20, Maple Holdings LLC"
                 : "Residential, primary\nStorage, ancillary\nGarage, ancillary"
           }
           onChange={(event) => setText(event.target.value)}
