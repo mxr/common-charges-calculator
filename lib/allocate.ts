@@ -51,7 +51,10 @@ export const computeCharges = (budget: Budget): ChargeResult => {
   const policyById = new Map(budget.policies.map((policy) => [policy.id, policy]));
   const inflationFactor = 1 + budget.adjustments.inflationPct / 100;
   const reserveFactor = budget.adjustments.reservePct / 100;
-  const offsetByType = new Map((budget.adjustments.offsets ?? []).map((offset) => [offset.unitType, offset.pct]));
+  // A 0% offset is ignored so its units still share in rebalancing other offsets.
+  const offsetByType = new Map(
+    (budget.adjustments.offsets ?? []).filter((offset) => offset.pct !== 0).map((offset) => [offset.unitType, offset.pct]),
+  );
 
   const entries: UnitEntry[] = budget.units.map((unit) => {
     const owner = budget.owners.find((candidate) => candidate.id === unit.ownerId);

@@ -210,6 +210,21 @@ describe("computeCharges adjustments", () => {
     expect(result.warnings.some((w) => w.includes("could not be rebalanced"))).toBe(true);
   });
 
+  it("still rebalances onto units whose type has a 0% offset", () => {
+    const budget = makeBudget({
+      units: [unit("c1", "commercial", 50, "o1"), unit("r1", "residential", 50, "o1")],
+      adjustments: {
+        inflationPct: 0,
+        reservePct: 0,
+        offsets: [
+          { unitType: "commercial", pct: -10 },
+          { unitType: "residential", pct: 0 },
+        ],
+      },
+    });
+    expect(chargeFor(budget, "r1").total).toBeCloseTo(55);
+  });
+
   it("rebalances equally when the receiving units carry no common interest", () => {
     const budget = makeBudget({
       units: [unit("c1", "commercial", 100, "o1"), unit("r1", "residential", 0, "o1"), unit("r2", "residential", 0, "o1")],
@@ -324,6 +339,14 @@ describe("validateBudget", () => {
       expenses: [{ id: "e", name: "Reserve placeholder", category: "general", amount: 0, policyId: "p" }],
     });
     expect(validateBudget(budget).some((w) => w.includes("is $0"))).toBe(true);
+  });
+
+  it.each([
+    ["no unit types", [{ unitTypes: [], tags: [], weight: 100, method: "common_interest" as const }]],
+    ["all zero weights", [{ unitTypes: ["residential"], tags: [], weight: 0, method: "common_interest" as const }]],
+  ])("warns when an expense uses a policy whose rules have %s", (_, rules) => {
+    const budget = makeBudget({ policies: [{ id: "p", name: "empty", rules }] });
+    expect(validateBudget(budget)).toContain('Expense "exp" uses policy "empty", which allocates to no unit types.');
   });
 
   it("warns when a unit type or category is unused", () => {
@@ -518,6 +541,33 @@ describe("serialize round-trips", () => {
     expect(parsed.expenses[0]?.policyId).toBe("");
     expect(parsed.adjustments.offsets).toEqual([{ unitType: "commercial", pct: -5 }]);
     expect(parsed.adjustments.incomeOffset).toBe(200);
+  });
+
+  it("omits $0 expenses, empty policies, and 0% offsets from the packed encoding", () => {
+    const rule = (unitTypes: string[], weight: number) => ({ unitTypes, tags: [], weight, method: "common_interest" as const });
+    const budget = makeBudget({
+      unitTypes: [ut("residential")],
+      categories: ["general"],
+      policies: [
+        { id: "none", name: "no rules", rules: [] },
+        { id: "zero", name: "zero weight", rules: [rule(["residential"], 0), rule(["residential"], 0)] },
+        { id: "untyped", name: "no types", rules: [rule([], 100)] },
+        { id: "real", name: "real", rules: [rule(["residential"], 100)] },
+      ],
+      expenses: [
+        { id: "free", name: "free", category: "general", amount: 0, policyId: "real" },
+        { id: "paid", name: "paid", category: "general", amount: 100, policyId: "real" },
+        { id: "orphaned", name: "orphaned", category: "general", amount: 50, policyId: "zero" },
+      ],
+      adjustments: { inflationPct: 0, reservePct: 0, offsets: [{ unitType: "residential", pct: 0 }], incomeOffset: 0 },
+    });
+    const parsed = parseBudgetUrl(serializeBudgetUrl(budget)) as Budget;
+    expect(parsed.policies.map((policy) => policy.name)).toEqual(["real"]);
+    expect(parsed.expenses.map((expense) => [expense.name, expense.policyId])).toEqual([
+      ["paid", parsed.policies[0]?.id],
+      ["orphaned", ""],
+    ]);
+    expect(parsed.adjustments.offsets).toEqual([]);
   });
 });
 

@@ -1,5 +1,5 @@
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from "lz-string";
-import { normalizeBudget } from "./budget";
+import { isEmptyPolicy, normalizeBudget } from "./budget";
 import { ALLOCATION_METHODS } from "./types";
 import type { Budget, UnitType } from "./types";
 
@@ -22,8 +22,13 @@ type PackedAdjustments = [number, number, Array<[Ref, number]>, number];
 type Packed = [PackedUnitType[], string[], PackedOwner[], PackedUnit[], PackedPolicy[], PackedExpense[], PackedAdjustments];
 
 const pack = (budget: Budget): Packed => {
+  // $0 expenses, empty policies, and 0% offsets have no effect on charges, so they are left out of the URL.
+  // Expenses that pointed at a dropped policy decode as having no policy.
+  const policies = budget.policies.filter((policy) => !isEmptyPolicy(policy));
+  const expenses = budget.expenses.filter((expense) => expense.amount !== 0);
+  const offsets = (budget.adjustments.offsets ?? []).filter((offset) => offset.pct !== 0);
   const ownerIndex = new Map(budget.owners.map((owner, i) => [owner.id, i]));
-  const policyIndex = new Map(budget.policies.map((policy, i) => [policy.id, i]));
+  const policyIndex = new Map(policies.map((policy, i) => [policy.id, i]));
   const typeIndex = new Map(budget.unitTypes.map((type, i) => [type.name, i]));
   const categoryIndex = new Map(budget.categories.map((category, i) => [category, i]));
 
@@ -37,7 +42,7 @@ const pack = (budget: Budget): Packed => {
     budget.units.map(
       (unit) => [unit.label, typeRef(unit.type), unit.commonInterest, ownerIndex.get(unit.ownerId) ?? -1, unit.tags] as PackedUnit,
     ),
-    budget.policies.map(
+    policies.map(
       (policy) =>
         [
           policy.name,
@@ -46,7 +51,7 @@ const pack = (budget: Budget): Packed => {
           ),
         ] as PackedPolicy,
     ),
-    budget.expenses.map(
+    expenses.map(
       (expense) =>
         [
           expense.name,
@@ -58,7 +63,7 @@ const pack = (budget: Budget): Packed => {
     [
       adjustments.inflationPct,
       adjustments.reservePct,
-      (adjustments.offsets ?? []).map((offset) => [typeRef(offset.unitType), offset.pct] as [Ref, number]),
+      offsets.map((offset) => [typeRef(offset.unitType), offset.pct] as [Ref, number]),
       adjustments.incomeOffset ?? 0,
     ],
   ];
