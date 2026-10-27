@@ -194,6 +194,15 @@ function HomeContent() {
     addUnitTypeAndFocus("");
   };
 
+  const setOffsetPct = (offsetIndex: number, pct: number) =>
+    patch((draft) => ({
+      ...draft,
+      adjustments: {
+        ...draft.adjustments,
+        offsets: (draft.adjustments.offsets ?? []).map((o, i) => (i === offsetIndex ? { ...o, pct } : o)),
+      },
+    }));
+
   // Rename a unit type and carry the new name onto every reference (units, policy rules, offsets, and
   // the saved sort order), since types are referenced by name.
   const renameUnitType = (from: string, to: string) => {
@@ -1915,20 +1924,22 @@ function HomeContent() {
                         </option>
                       ))}
                     </select>
-                    <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-[#4a4037]">
-                      offset %
+                    <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
+                      offset %{/* The slider snaps to 10% steps; the number field accepts any percent. */}
+                      <input
+                        type="range"
+                        min={-100}
+                        max={100}
+                        step={10}
+                        aria-label="Offset percent"
+                        className="w-40 accent-[#1b1a17]"
+                        value={Math.max(-100, Math.min(100, offset.pct))}
+                        onChange={(event) => setOffsetPct(offsetIndex, Number(event.target.value))}
+                      />
                       <NumberField
                         className={`${fieldBase} w-24`}
                         value={offset.pct}
-                        onChange={(next) =>
-                          patch((draft) => ({
-                            ...draft,
-                            adjustments: {
-                              ...draft.adjustments,
-                              offsets: (draft.adjustments.offsets ?? []).map((o, i) => (i === offsetIndex ? { ...o, pct: next } : o)),
-                            },
-                          }))
-                        }
+                        onChange={(next) => setOffsetPct(offsetIndex, next)}
                       />
                     </span>
                     <button
