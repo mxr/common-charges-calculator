@@ -41,8 +41,6 @@ const pillButton =
   "inline-flex items-center gap-2 rounded-full border border-[#1b1a17] px-4 py-2 text-sm font-semibold text-[#1b1a17] transition hover:-translate-y-0.5 hover:bg-[#f1e7db]";
 const solidButton =
   "inline-flex items-center gap-2 rounded-full bg-[#1b1a17] px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(30,27,23,0.2)] transition hover:-translate-y-0.5 hover:bg-[#2d2a25]";
-const removeButton =
-  "rounded-full border border-[#f0c8c6] px-3 py-1 text-xs font-semibold text-[#c0443c] transition hover:border-[#e9a8a4]";
 const dangerButton =
   "inline-flex items-center gap-2 rounded-full border border-[#c0443c] px-4 py-2 text-sm font-semibold text-[#c0443c] transition hover:-translate-y-0.5 hover:bg-[#fbeae9]";
 const groupHeading = "text-xs font-semibold uppercase tracking-[0.25em] text-[#8c7b6c]";
@@ -499,10 +497,11 @@ function HomeContent() {
         />
         <button
           type="button"
-          className={removeButton}
+          className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+          aria-label="Remove unit"
           onClick={() => patch((draft) => ({ ...draft, units: draft.units.filter((u) => u.id !== unit.id) }))}
         >
-          Remove
+          <TrashIcon />
         </button>
       </div>
     );
@@ -1892,7 +1891,8 @@ function HomeContent() {
                     </span>
                     <button
                       type="button"
-                      className={removeButton}
+                      className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                      aria-label="Remove offset"
                       onClick={() =>
                         patch((draft) => ({
                           ...draft,
@@ -1903,7 +1903,7 @@ function HomeContent() {
                         }))
                       }
                     >
-                      Remove
+                      <TrashIcon />
                     </button>
                   </div>
                 ))}
