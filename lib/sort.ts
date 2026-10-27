@@ -95,6 +95,35 @@ export function compareUnitTypes(a: UnitType, b: UnitType, key: UnitTypeSortKey,
   return a.name.localeCompare(b.name) * factor;
 }
 
+// Units by type name, then natural label order (Commercial CU1, CU2 before Residential 2A, 2B).
+function compareUnitsByTypeThenLabel(a: Unit, b: Unit): number {
+  return a.type.localeCompare(b.type) || a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" });
+}
+
+// Order owners by their first primary unit (falling back to ancillary when they own no primary
+// unit), comparing type then label. Owners with no units sort last.
+export function sortOwnersByPrimaryUnit<T extends { ownerId: string }>(
+  owners: T[],
+  units: Unit[],
+  classByType: Map<string, UnitClassification>,
+): T[] {
+  const firstUnit = new Map<string, Unit>();
+  for (const classification of ["ancillary", "primary"] as const) {
+    const ofClass = units.filter((unit) => unit.ownerId && classByType.get(unit.type) === classification).sort(compareUnitsByTypeThenLabel);
+    for (const unit of ofClass.reverse()) {
+      firstUnit.set(unit.ownerId, unit);
+    }
+  }
+  return [...owners].sort((a, b) => {
+    const au = firstUnit.get(a.ownerId);
+    const bu = firstUnit.get(b.ownerId);
+    if (!au || !bu) {
+      return (au ? 0 : 1) - (bu ? 0 : 1);
+    }
+    return compareUnitsByTypeThenLabel(au, bu);
+  });
+}
+
 // Reorder by the saved order (preserving cascade), then sort by `compare`, returning the new id order.
 export function deriveOrder<T>(items: T[], prevOrder: string[], idOf: (item: T) => string, compare: (a: T, b: T) => number): string[] {
   const ordered = applyOrder(items, prevOrder, idOf);

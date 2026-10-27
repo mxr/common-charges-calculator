@@ -21,6 +21,7 @@ import {
   passesTypeFilter,
   passesUnitFilter,
   serializeSortParam,
+  sortOwnersByPrimaryUnit,
   UNIT_FILTER_LABELS,
   UNIT_FILTERS,
   UNIT_SORT_LABELS,
@@ -631,15 +632,7 @@ function HomeContent() {
   }
   const expenseName = new Map(budget.expenses.map((expense) => [expense.id, expense.name || "(unnamed)"]));
 
-  const sortedPerOwner = [...result.perOwner].sort((a, b) => {
-    const unitLabel = (ownerId: string, classification: "primary" | "ancillary") => {
-      const unit = budget.units.find((u) => u.ownerId === ownerId && classByType.get(u.type) === classification);
-      return unit?.label ?? null;
-    };
-    const aLabel = unitLabel(a.ownerId, "primary") ?? unitLabel(a.ownerId, "ancillary") ?? "￿";
-    const bLabel = unitLabel(b.ownerId, "primary") ?? unitLabel(b.ownerId, "ancillary") ?? "￿";
-    return aLabel.localeCompare(bLabel, undefined, { numeric: true });
-  });
+  const sortedPerOwner = sortOwnersByPrimaryUnit(result.perOwner, budget.units, classByType);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#f7f1e8]">
