@@ -40,10 +40,10 @@ export const DEFAULT_BUDGET: Budget = {
   // Several units per type share the same common interest, and types mix owners, so sorting by
   // common interest then label, or owner then number, shows the earlier sort surviving as ties break.
   units: [
-    { id: "unit-1a", label: "1A", type: "Residential", commonInterest: 12, ownerId: "owner-alice", tags: ["Hydronic"] },
-    { id: "unit-1b", label: "1B", type: "Residential", commonInterest: 8, ownerId: "owner-bob", tags: ["Hydronic"] },
-    { id: "unit-2a", label: "2A", type: "Residential", commonInterest: 12, ownerId: "owner-carol", tags: ["Hydronic"] },
-    { id: "unit-2b", label: "2B", type: "Residential", commonInterest: 8, ownerId: "owner-alice", tags: ["Hydronic"] },
+    { id: "unit-1a", label: "1A", type: "Residential", commonInterest: 12, ownerId: "owner-alice", tags: ["hydronic"] },
+    { id: "unit-1b", label: "1B", type: "Residential", commonInterest: 8, ownerId: "owner-bob", tags: ["hydronic"] },
+    { id: "unit-2a", label: "2A", type: "Residential", commonInterest: 12, ownerId: "owner-carol", tags: ["hydronic"] },
+    { id: "unit-2b", label: "2B", type: "Residential", commonInterest: 8, ownerId: "owner-alice", tags: ["hydronic"] },
     { id: "unit-3n", label: "3N", type: "Residential", commonInterest: 13, ownerId: "owner-bob", tags: [] },
     { id: "unit-3s", label: "3S", type: "Residential", commonInterest: 9, ownerId: "owner-llc", tags: [] },
     { id: "unit-cu1", label: "CU1", type: "Commercial", commonInterest: 9, ownerId: "owner-llc", tags: [] },
@@ -90,7 +90,7 @@ export const DEFAULT_BUDGET: Budget = {
     {
       id: "policy-hydronic",
       name: "Hydronic units only",
-      rules: [{ unitTypes: ["Residential"], tags: ["Hydronic"], weight: 100, method: "common_interest" }],
+      rules: [{ unitTypes: ["Residential"], tags: ["hydronic"], weight: 100, method: "common_interest" }],
     },
   ],
   // Within each category several line items share an amount or a split policy, so sorting by amount

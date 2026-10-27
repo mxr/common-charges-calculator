@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import { computeCharges } from "../lib/allocate";
 import { DEFAULT_BUDGET, makeId, normalizeTags, validateBudget } from "../lib/budget";
 import { formatCurrency } from "../lib/format";
@@ -505,15 +505,10 @@ function HomeContent() {
             }))
           }
         />
-        <TextField
-          className={field}
-          placeholder="Tags"
-          value={unit.tags.join(", ")}
+        <TagInput
+          tags={unit.tags}
           onChange={(next) =>
-            patch((draft) => ({
-              ...draft,
-              units: draft.units.map((u) => (u.id === unit.id ? { ...u, tags: normalizeTags(next.split(",")) } : u)),
-            }))
+            patch((draft) => ({ ...draft, units: draft.units.map((u) => (u.id === unit.id ? { ...u, tags: next } : u)) }))
           }
         />
         <button
@@ -2500,6 +2495,69 @@ function TextField({
         onKeyDown?.(event);
       }}
     />
+  );
+}
+
+// Tag editor: existing tags render as removable bubbles; typing then Enter, comma, or blur adds
+// tags, and Backspace in an empty input removes the last one. Once there are tags the input stays
+// out of the layout until focused (clicking the box focuses it), so it never wraps onto an empty line.
+function TagInput({ tags, onChange }: { tags: string[]; onChange: (next: string[]) => void }) {
+  const [draft, setDraft] = useState("");
+  const [focused, setFocused] = useState(false);
+  // The label must name the input; otherwise clicking it activates its first button (a tag's remove x).
+  const inputId = useId();
+  const commit = () => {
+    const next = normalizeTags([...tags, ...draft.split(",")]);
+    if (next.length !== tags.length) {
+      onChange(next);
+    }
+    setDraft("");
+  };
+  return (
+    <label
+      htmlFor={inputId}
+      className="relative flex min-h-10 w-full cursor-text flex-wrap items-center gap-1 rounded-xl border border-[#e6d7c7] bg-[#fefbf7] px-1.5 py-1 text-sm font-medium text-[#1d1b18] transition focus-within:border-[#c9a888] focus-within:ring-2 focus-within:ring-[#edc9a6]/60"
+    >
+      {tags.map((tag) => (
+        <span
+          key={tag}
+          className="inline-flex items-center gap-0.5 rounded-full border border-[#e6d7c7] bg-white py-0.5 pr-0.5 pl-2 text-xs text-[#5b5148]"
+        >
+          {tag}
+          <button
+            type="button"
+            className="flex h-4 w-4 items-center justify-center rounded-full text-[#8c7b6c] hover:bg-[#f1e7db] hover:text-[#1d1b18]"
+            aria-label={`Remove tag ${tag}`}
+            onClick={() => onChange(tags.filter((item) => item !== tag))}
+          >
+            <svg {...iconProps} className="h-3 w-3" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </span>
+      ))}
+      <input
+        id={inputId}
+        className={`${tags.length && !focused ? "absolute h-0 w-0 opacity-0" : "w-0 min-w-12 flex-1"} bg-transparent px-1 text-xs outline-none`}
+        aria-label="Tags"
+        placeholder={tags.length ? "" : "Tags"}
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          commit();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === ",") {
+            event.preventDefault();
+            commit();
+          } else if (event.key === "Backspace" && draft === "" && tags.length) {
+            onChange(tags.slice(0, -1));
+          }
+        }}
+      />
+    </label>
   );
 }
 
