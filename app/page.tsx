@@ -2088,7 +2088,7 @@ function HomeContent() {
                                             <tr key={expense.id} className="border-t border-[#f2e8dd]">
                                               <td className="py-1 pr-3">{expenseName.get(expense.id)}</td>
                                               {units.map((u) => (
-                                                <td key={u.unitId} className="py-1 pl-3 text-right">
+                                                <td key={u.unitId} className="whitespace-nowrap py-1 pl-3 text-right">
                                                   {formatCurrency((u.byExpense[expense.id] ?? 0) / 12)}
                                                 </td>
                                               ))}
@@ -2098,7 +2098,7 @@ function HomeContent() {
                                             <tr className="border-t border-[#f2e8dd]">
                                               <td className="py-1 pr-3">Offset</td>
                                               {units.map((u) => (
-                                                <td key={u.unitId} className="py-1 pl-3 text-right">
+                                                <td key={u.unitId} className="whitespace-nowrap py-1 pl-3 text-right">
                                                   {formatCurrency(u.offset / 12)}
                                                 </td>
                                               ))}
@@ -2108,7 +2108,7 @@ function HomeContent() {
                                             <tr className="border-t border-[#f2e8dd]">
                                               <td className="py-1 pr-3">Income</td>
                                               {units.map((u) => (
-                                                <td key={u.unitId} className="py-1 pl-3 text-right">
+                                                <td key={u.unitId} className="whitespace-nowrap py-1 pl-3 text-right">
                                                   {formatCurrency(u.income / 12)}
                                                 </td>
                                               ))}
@@ -2118,7 +2118,7 @@ function HomeContent() {
                                             <tr className="border-t border-[#f2e8dd]">
                                               <td className="py-1 pr-3">Reserve</td>
                                               {units.map((u) => (
-                                                <td key={u.unitId} className="py-1 pl-3 text-right">
+                                                <td key={u.unitId} className="whitespace-nowrap py-1 pl-3 text-right">
                                                   {formatCurrency(u.reserve / 12)}
                                                 </td>
                                               ))}
@@ -2127,7 +2127,7 @@ function HomeContent() {
                                           <tr className="border-t border-[#eadccb] font-semibold text-[#181716]">
                                             <td className="py-1 pr-3">Total</td>
                                             {units.map((u) => (
-                                              <td key={u.unitId} className="py-1 pl-3 text-right">
+                                              <td key={u.unitId} className="whitespace-nowrap py-1 pl-3 text-right">
                                                 {formatCurrency(u.monthly)}
                                               </td>
                                             ))}
