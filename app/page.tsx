@@ -45,6 +45,7 @@ const solidButton =
 const dangerButton =
   "inline-flex items-center gap-2 rounded-full border border-[#c0443c] px-4 py-2 text-sm font-semibold text-[#c0443c] transition hover:-translate-y-0.5 hover:bg-[#fbeae9]";
 const groupHeading = "text-xs font-semibold uppercase tracking-[0.25em] text-[#8c7b6c]";
+const breakdownSubheading = "pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9a8a7b]";
 const iconButton =
   "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#d8c7b5] text-[#5b5148] transition hover:-translate-y-0.5 hover:bg-[#f1e7db]";
 
@@ -2090,6 +2091,13 @@ function HomeContent() {
                                           </tr>
                                         </thead>
                                         <tbody className="text-[#4a4037]">
+                                          {rows.length > 0 ? (
+                                            <tr>
+                                              <td colSpan={units.length + 1} className={`${breakdownSubheading} pt-2`}>
+                                                Expenses
+                                              </td>
+                                            </tr>
+                                          ) : null}
                                           {rows.map((expense) => (
                                             <tr key={expense.id} className="border-t border-[#f2e8dd]">
                                               <td className="py-1 pr-3">{expenseName.get(expense.id)}</td>
@@ -2100,6 +2108,13 @@ function HomeContent() {
                                               ))}
                                             </tr>
                                           ))}
+                                          {showOffset || showIncome || showReserve ? (
+                                            <tr>
+                                              <td colSpan={units.length + 1} className={`${breakdownSubheading} pt-3`}>
+                                                Adjustments
+                                              </td>
+                                            </tr>
+                                          ) : null}
                                           {showOffset ? (
                                             <tr className="border-t border-[#f2e8dd]">
                                               <td className="py-1 pr-3">Offset</td>
