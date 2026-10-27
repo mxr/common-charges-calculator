@@ -11,6 +11,7 @@ import {
   passesTypeFilter,
   passesUnitFilter,
   serializeSortParam,
+  sortOwnersByPrimaryUnit,
 } from "../lib/sort";
 import type { Expense, Owner, Unit, UnitClassification, UnitType } from "../lib/types";
 
@@ -215,5 +216,36 @@ describe("applyOrder / nextSortDir / deriveOrder", () => {
       (x, y) => x.a - y.a,
     );
     expect(byA).toEqual(["2", "1", "3"]);
+  });
+});
+
+describe("sortOwnersByPrimaryUnit", () => {
+  const classByType = new Map<string, UnitClassification>([
+    ["Commercial", "primary"],
+    ["Residential", "primary"],
+    ["Storage", "ancillary"],
+  ]);
+
+  it("orders by primary unit type, then label, with ancillary-only and unit-less owners after", () => {
+    const units = [
+      u("1", "2B", "Residential", 1, "res2b"),
+      u("2", "S1", "Storage", 1, "res2b"),
+      u("3", "CU2", "Commercial", 1, "cu2"),
+      u("4", "10A", "Residential", 1, "res10a"),
+      u("5", "2A", "Residential", 1, "res2a"),
+      u("6", "CU1", "Commercial", 1, "cu1"),
+      u("7", "S2", "Storage", 1, "storage"),
+      u("8", "A1", "Storage", 1, "res2a"),
+    ];
+    const owners = ["none", "storage", "res10a", "res2b", "cu2", "res2a", "cu1"].map((ownerId) => ({ ownerId }));
+    expect(sortOwnersByPrimaryUnit(owners, units, classByType).map((owner) => owner.ownerId)).toEqual([
+      "cu1",
+      "cu2",
+      "res2a",
+      "res2b",
+      "res10a",
+      "storage",
+      "none",
+    ]);
   });
 });
