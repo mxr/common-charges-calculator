@@ -158,7 +158,7 @@ function HomeContent() {
   // Add a new owner, focusing its name input once rendered.
   const addOwnerAndFocus = (name: string) => {
     const id = makeId("owner");
-    patch((draft) => ({ ...draft, owners: [...draft.owners, { id, name, excluded: false, currentMonthly: 0 }] }));
+    patch((draft) => ({ ...draft, owners: [...draft.owners, { id, name, isBoard: false, currentMonthly: 0 }] }));
     focusOwner(id);
   };
 
@@ -753,8 +753,8 @@ function HomeContent() {
               {collapsedOwners ? null : (
                 <>
                   <p className={`${sectionHint} mt-1`}>
-                    Add all owners here with 'Add owner', batch upload, or the Tab key. Mark an owner as 'excluded' and their Units don't
-                    pay common charges (example: if the condo board owns units).
+                    Add all owners here with 'Add owner', batch upload, or the Tab key. Mark one owner as the 'Board' if the board owns
+                    units. Board units don't pay common charges; their share is spread across all other units by common interest.
                   </p>
                   <div className="mt-4 overflow-x-auto">
                     <table className="w-full border-collapse text-sm">
@@ -799,18 +799,19 @@ function HomeContent() {
                                 <div className="flex items-center justify-end gap-2">
                                   <label className="flex items-center gap-1 whitespace-nowrap text-xs text-[#4a4037]">
                                     <input
-                                      type="checkbox"
-                                      checked={owner.excluded}
-                                      onChange={(event) =>
+                                      type="radio"
+                                      name="board-owner"
+                                      checked={owner.isBoard}
+                                      onChange={() => {}}
+                                      // A radio can't normally be unchecked, so toggle on click to allow having no board.
+                                      onClick={() =>
                                         patch((draft) => ({
                                           ...draft,
-                                          owners: draft.owners.map((o) =>
-                                            o.id === owner.id ? { ...o, excluded: event.target.checked } : o,
-                                          ),
+                                          owners: draft.owners.map((o) => ({ ...o, isBoard: o.id === owner.id && !owner.isBoard })),
                                         }))
                                       }
                                     />
-                                    Excluded
+                                    Board
                                   </label>
                                   <button
                                     type="button"
@@ -2020,18 +2021,18 @@ function HomeContent() {
                           }
                         >
                           <span className="text-lg leading-none text-[#8c7b6c]">{chargesCollapsed ? "▸" : "▾"}</span>
-                          <span className={`font-semibold ${owner.excluded ? "text-[#a89a8b]" : "text-[#181716]"}`}>
+                          <span className={`font-semibold ${owner.isBoard ? "text-[#a89a8b]" : "text-[#181716]"}`}>
                             {owner.name}
-                            {owner.excluded ? <span className="ml-2 text-xs italic">excluded</span> : null}
+                            {owner.isBoard ? <span className="ml-2 text-xs italic">board</span> : null}
                           </span>
                         </button>
-                        <span className={`font-semibold ${owner.excluded ? "text-[#a89a8b]" : "text-[#181716]"}`}>
+                        <span className={`font-semibold ${owner.isBoard ? "text-[#a89a8b]" : "text-[#181716]"}`}>
                           {formatCurrency(owner.monthly)}/mo
                         </span>
                       </div>
                       {chargesCollapsed ? null : (
                         <>
-                          {owner.excluded
+                          {owner.isBoard
                             ? null
                             : (() => {
                                 const delta = owner.monthly - owner.currentMonthly;
@@ -2074,6 +2075,7 @@ function HomeContent() {
                                   const rows = budget.expenses.filter((expense) =>
                                     units.some((u) => Math.abs(u.byExpense[expense.id] ?? 0) > 0.005),
                                   );
+                                  const showBoard = units.some((u) => Math.abs(u.board) > 0.005);
                                   const showOffset = units.some((u) => Math.abs(u.offset) > 0.005);
                                   const showIncome = units.some((u) => Math.abs(u.income) > 0.005);
                                   const showReserve = units.some((u) => Math.abs(u.reserve) > 0.005);
@@ -2108,11 +2110,21 @@ function HomeContent() {
                                               ))}
                                             </tr>
                                           ))}
-                                          {showOffset || showIncome || showReserve ? (
+                                          {showBoard || showOffset || showIncome || showReserve ? (
                                             <tr>
                                               <td colSpan={units.length + 1} className={`${breakdownSubheading} pt-3`}>
                                                 Adjustments
                                               </td>
+                                            </tr>
+                                          ) : null}
+                                          {showBoard ? (
+                                            <tr className="border-t border-[#f2e8dd]">
+                                              <td className="py-1 pr-3">Board units</td>
+                                              {units.map((u) => (
+                                                <td key={u.unitId} className="whitespace-nowrap py-1 pl-3 text-right">
+                                                  {formatCurrency(u.board / 12)}
+                                                </td>
+                                              ))}
                                             </tr>
                                           ) : null}
                                           {showOffset ? (
@@ -2263,7 +2275,7 @@ function BatchModal({
         <h3 className="text-xl font-semibold text-[#181716]">Batch add {noun}</h3>
         <p className="mt-1 text-sm text-[#5b5148]">
           {kind === "owner"
-            ? "One owner per line: name, current monthly (comma or tab separated). The amount is optional and may have a $ prefix. Exclusion is not set here; toggle it afterwards."
+            ? "One owner per line: name, current monthly (comma or tab separated). The amount is optional and may have a $ prefix. The board owner is not set here; pick it afterwards."
             : kind === "unit"
               ? "One unit per line: label, type, common interest, owner, then optional tags (comma or tab separated). Owner is matched by name to an existing owner."
               : "One unit type per line: name, classification (comma or tab separated). Classification is optional and defaults to Primary; use 'primary' or 'ancillary'."}

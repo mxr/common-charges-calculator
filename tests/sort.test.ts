@@ -23,7 +23,7 @@ const u = (id: string, label: string, type: string, ci: number, ownerId = ""): U
   ownerId,
   tags: [],
 });
-const o = (id: string, name: string, currentMonthly = 0): Owner => ({ id, name, excluded: false, currentMonthly });
+const o = (id: string, name: string, currentMonthly = 0): Owner => ({ id, name, isBoard: false, currentMonthly });
 const t = (name: string, classification: UnitClassification = "primary"): UnitType => ({ name, classification });
 const e = (id: string, name: string, amount: number, policyId = "p"): Expense => ({ id, name, amount, policyId, category: "c" });
 

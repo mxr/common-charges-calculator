@@ -7,7 +7,7 @@ import { parseOwnerLines, parseUnitLines, parseUnitTypeLines } from "../lib/pars
 import { exportBudgetJson, parseBudgetJson, parseBudgetUrl, serializeBudgetUrl } from "../lib/serialize";
 import type { Budget } from "../lib/types";
 
-const owner = (id: string, excluded = false): Budget["owners"][number] => ({ id, name: id, excluded, currentMonthly: 0 });
+const owner = (id: string, isBoard = false): Budget["owners"][number] => ({ id, name: id, isBoard, currentMonthly: 0 });
 
 const unit = (id: string, type: string, commonInterest: number, ownerId: string, tags: string[] = []): Budget["units"][number] => ({
   id,
@@ -136,15 +136,56 @@ describe("computeCharges policies", () => {
   });
 });
 
-describe("computeCharges excluded owners", () => {
-  it("drops excluded units so the rest absorb the cost", () => {
+describe("computeCharges board owner", () => {
+  it("drops board units so the rest absorb the cost", () => {
     const budget = makeBudget({
       owners: [owner("o1"), owner("board", true)],
       units: [unit("u1", "residential", 50, "o1"), unit("uboard", "residential", 50, "board")],
     });
     expect(chargeFor(budget, "u1").total).toBeCloseTo(100);
     expect(chargeFor(budget, "uboard").total).toBeCloseTo(0);
-    expect(chargeFor(budget, "uboard").excluded).toBe(true);
+    expect(chargeFor(budget, "uboard").isBoard).toBe(true);
+  });
+
+  it("spreads the board's share of a type-specific expense across all other units", () => {
+    const budget = makeBudget({
+      owners: [owner("bob"), owner("board", true), owner("alice")],
+      unitTypes: [ut("cabana"), ut("residential")],
+      units: [unit("c1", "cabana", 10, "bob"), unit("c2", "cabana", 10, "board"), unit("r1", "residential", 80, "alice")],
+      policies: [{ id: "p", name: "cabana", rules: [{ unitTypes: ["cabana"], tags: [], weight: 100, method: "common_interest" }] }],
+      expenses: [{ id: "e", name: "cabana", category: "general", amount: 120, policyId: "p" }],
+    });
+    const result = computeCharges(budget);
+    // c1 owes its own 60, plus 10/90 of the board's 60; r1 gets the other 80/90.
+    expect(chargeFor(budget, "c1").byExpense["e"]).toBeCloseTo(60);
+    expect(chargeFor(budget, "c1").board).toBeCloseTo(60 / 9);
+    expect(chargeFor(budget, "c1").base).toBeCloseTo(60 + 60 / 9);
+    expect(chargeFor(budget, "r1").byExpense["e"]).toBeUndefined();
+    expect(chargeFor(budget, "r1").board).toBeCloseTo((60 * 8) / 9);
+    expect(chargeFor(budget, "c2").total).toBeCloseTo(0);
+    expect(result.totals.total).toBeCloseTo(120);
+  });
+
+  it("splits the board's share equally when other units carry no common interest", () => {
+    const budget = makeBudget({
+      owners: [owner("o1"), owner("o2"), owner("board", true)],
+      units: [unit("u1", "residential", 0, "o1"), unit("u2", "residential", 0, "o2"), unit("ub", "commercial", 100, "board")],
+      policies: [{ id: "p", name: "comm", rules: [{ unitTypes: ["commercial"], tags: [], weight: 100, method: "common_interest" }] }],
+    });
+    expect(chargeFor(budget, "u1").total).toBeCloseTo(50);
+    expect(chargeFor(budget, "u2").total).toBeCloseTo(50);
+  });
+
+  it("leaves the board's share unallocated when every unit is board owned", () => {
+    const budget = makeBudget({ owners: [owner("board", true)], units: [unit("ub", "residential", 100, "board")] });
+    const result = computeCharges(budget);
+    expect(result.unallocated).toBeCloseTo(100);
+    expect(result.totals.total).toBeCloseTo(0);
+  });
+
+  it("keeps only the first board owner when normalizing", () => {
+    const budget = normalizeBudget({ owners: [{ name: "A", excluded: true }, { name: "B", isBoard: true }, { name: "C" }] });
+    expect(budget.owners.map((o) => o.isBoard)).toEqual([true, false, false]);
   });
 });
 
@@ -400,7 +441,7 @@ describe("normalizeBudget", () => {
       adjustments: { inflationPct: "3", offsets: [{ unitType: "commercial", pct: "-5" }] },
     });
     expect(budget.owners[0]?.id).toMatch(/^owner-/);
-    expect(budget.owners[0]?.excluded).toBe(false);
+    expect(budget.owners[0]?.isBoard).toBe(false);
     expect(budget.units[0]?.commonInterest).toBe(40);
     expect(budget.policies[0]?.rules[0]?.weight).toBe(10);
     expect(budget.policies[0]?.rules[0]?.method).toBe("common_interest");
@@ -603,12 +644,12 @@ describe("batch parsing", () => {
       ["Bob", 900],
       ["Carol", 0],
     ]);
-    expect(owners.every((o) => o.excluded === false)).toBe(true);
+    expect(owners.every((o) => o.isBoard === false)).toBe(true);
     expect(skipped).toEqual([]);
   });
 
   it("parses valid unit lines and skips bad ones", () => {
-    const owners = [owner("owner-1"), { id: "owner-2", name: "Maple Holdings LLC", excluded: false, currentMonthly: 0 }];
+    const owners = [owner("owner-1"), { id: "owner-2", name: "Maple Holdings LLC", isBoard: false, currentMonthly: 0 }];
     const text = [
       "1A,\tresidential ,  30% , owner-1, hydronic, corner",
       "CU1\tCOMMERCIAL\t20\tmaple holdings llc",
