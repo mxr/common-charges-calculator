@@ -9,9 +9,11 @@ export const ALLOCATION_METHOD_LABELS: Record<AllocationMethod, string> = {
 
 // A policy splits one expense into one or more rules. Each rule takes `weight`% of
 // the expense and divides it among units of the explicitly listed types using
-// `method` (empty list = no eligible units). Rule weights in a policy are expected to sum to 100.
+// `method` (empty list = no eligible units). When `tags` is non-empty, eligibility is further
+// narrowed to units carrying at least one of those tags. Rule weights in a policy are expected to sum to 100.
 export type PolicyRule = {
   unitTypes: string[];
+  tags: string[];
   weight: number;
   method: AllocationMethod;
 };
@@ -38,6 +40,8 @@ export type Unit = {
   type: string;
   commonInterest: number;
   ownerId: string;
+  // Freeform labels (e.g. "Hydronic") that policy rules can target independently of unit type.
+  tags: string[];
 };
 
 // Whether a unit type is a primary dwelling or an ancillary space (storage, parking, etc.).

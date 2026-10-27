@@ -13,8 +13,9 @@ type PackedOwner = [string, 0 | 1, number];
 // [name, classification] where 0 = primary, 1 = ancillary. A bare string is also accepted on read
 // for budgets shared before classifications existed.
 type PackedUnitType = [string, 0 | 1];
-type PackedUnit = [string, Ref, number, number];
-type PackedRule = [Ref[], number, number];
+// Tags trail the unit and rule tuples so budgets shared before tags existed still decode (as no tags).
+type PackedUnit = [string, Ref, number, number, string[]?];
+type PackedRule = [Ref[], number, number, string[]?];
 type PackedPolicy = [string, PackedRule[]];
 type PackedExpense = [string, Ref, number, number];
 type PackedAdjustments = [number, number, Array<[Ref, number]>, number];
@@ -33,12 +34,16 @@ const pack = (budget: Budget): Packed => {
     budget.unitTypes.map((type) => [type.name, type.classification === "ancillary" ? 1 : 0] as PackedUnitType),
     budget.categories,
     budget.owners.map((owner) => [owner.name, owner.excluded ? 1 : 0, owner.currentMonthly] as PackedOwner),
-    budget.units.map((unit) => [unit.label, typeRef(unit.type), unit.commonInterest, ownerIndex.get(unit.ownerId) ?? -1] as PackedUnit),
+    budget.units.map(
+      (unit) => [unit.label, typeRef(unit.type), unit.commonInterest, ownerIndex.get(unit.ownerId) ?? -1, unit.tags] as PackedUnit,
+    ),
     budget.policies.map(
       (policy) =>
         [
           policy.name,
-          policy.rules.map((rule) => [rule.unitTypes.map(typeRef), rule.weight, ALLOCATION_METHODS.indexOf(rule.method)] as PackedRule),
+          policy.rules.map(
+            (rule) => [rule.unitTypes.map(typeRef), rule.weight, ALLOCATION_METHODS.indexOf(rule.method), rule.tags] as PackedRule,
+          ),
         ] as PackedPolicy,
     ),
     budget.expenses.map(
@@ -80,18 +85,20 @@ const unpack = (packed: Packed): Budget => {
     unitTypes: unitTypeList,
     categories,
     owners: owners.map(([name, excluded, currentMonthly], i) => ({ id: ownerIds[i], name, excluded: excluded === 1, currentMonthly })),
-    units: units.map(([label, type, commonInterest, ownerRef], i) => ({
+    units: units.map(([label, type, commonInterest, ownerRef, tags], i) => ({
       id: `unit-${i}`,
       label,
       type: resolveType(type),
       commonInterest,
       ownerId: ownerRef >= 0 ? (ownerIds[ownerRef] ?? "") : "",
+      tags,
     })),
     policies: policies.map(([name, rules], i) => ({
       id: policyIds[i],
       name,
-      rules: rules.map(([ruleTypes, weight, methodIdx]) => ({
+      rules: rules.map(([ruleTypes, weight, methodIdx, tags]) => ({
         unitTypes: ruleTypes.map(resolveType),
+        tags,
         weight,
         method: ALLOCATION_METHODS[methodIdx] ?? ALLOCATION_METHODS[0],
       })),

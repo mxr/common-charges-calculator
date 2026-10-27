@@ -1,4 +1,4 @@
-import { makeId } from "./budget";
+import { makeId, normalizeTags } from "./budget";
 import type { Owner, Unit, UnitClassification, UnitType } from "./types";
 
 export type SkippedLine = { line: string; reason: string };
@@ -52,8 +52,8 @@ export const parseOwnerLines = (text: string): ParsedOwners => {
   return { owners, skipped: [] };
 };
 
-// Each line is "label, type, common interest, owner" (comma or tab separated).
-// Owner is matched by name (case-insensitive) against existing owners.
+// Each line is "label, type, common interest, owner, tags..." (comma or tab separated).
+// Owner is matched by name (case-insensitive) against existing owners. Any columns after owner are tags.
 export const parseUnitLines = (text: string, unitTypes: string[], owners: Owner[]): ParsedUnits => {
   const units: Unit[] = [];
   const skipped: SkippedLine[] = [];
@@ -65,7 +65,7 @@ export const parseUnitLines = (text: string, unitTypes: string[], owners: Owner[
     if (!line) {
       continue;
     }
-    const [label = "", typeRaw = "", ciRaw = "", ownerName = ""] = line.split(/\s*,\s*|\t+/).map((part) => part.trim());
+    const [label = "", typeRaw = "", ciRaw = "", ownerName = "", ...tags] = line.split(/\s*,\s*|\t+/).map((part) => part.trim());
     if (!label || !typeRaw || !ciRaw || !ownerName) {
       skipped.push({ line, reason: "expected: label, type, common interest, owner" });
       continue;
@@ -85,7 +85,7 @@ export const parseUnitLines = (text: string, unitTypes: string[], owners: Owner[
       skipped.push({ line, reason: `unknown owner "${ownerName}"` });
       continue;
     }
-    units.push({ id: makeId("unit"), label, type, commonInterest, ownerId });
+    units.push({ id: makeId("unit"), label, type, commonInterest, ownerId, tags: normalizeTags(tags) });
   }
 
   return { units, skipped };

@@ -14,7 +14,14 @@ import {
 } from "../lib/sort";
 import type { Expense, Owner, Unit, UnitClassification, UnitType } from "../lib/types";
 
-const u = (id: string, label: string, type: string, ci: number, ownerId = ""): Unit => ({ id, label, type, commonInterest: ci, ownerId });
+const u = (id: string, label: string, type: string, ci: number, ownerId = ""): Unit => ({
+  id,
+  label,
+  type,
+  commonInterest: ci,
+  ownerId,
+  tags: [],
+});
 const o = (id: string, name: string, currentMonthly = 0): Owner => ({ id, name, excluded: false, currentMonthly });
 const t = (name: string, classification: UnitClassification = "primary"): UnitType => ({ name, classification });
 const e = (id: string, name: string, amount: number, policyId = "p"): Expense => ({ id, name, amount, policyId, category: "c" });
