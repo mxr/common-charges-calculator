@@ -38,7 +38,7 @@ const pack = (budget: Budget): Packed => {
   return [
     budget.unitTypes.map((type) => [type.name, type.classification === "ancillary" ? 1 : 0] as PackedUnitType),
     budget.categories,
-    budget.owners.map((owner) => [owner.name, owner.excluded ? 1 : 0, owner.currentMonthly] as PackedOwner),
+    budget.owners.map((owner) => [owner.name, owner.isBoard ? 1 : 0, owner.currentMonthly] as PackedOwner),
     budget.units.map(
       (unit) => [unit.label, typeRef(unit.type), unit.commonInterest, ownerIndex.get(unit.ownerId) ?? -1, unit.tags] as PackedUnit,
     ),
@@ -89,7 +89,7 @@ const unpack = (packed: Packed): Budget => {
   return normalizeBudget({
     unitTypes: unitTypeList,
     categories,
-    owners: owners.map(([name, excluded, currentMonthly], i) => ({ id: ownerIds[i], name, excluded: excluded === 1, currentMonthly })),
+    owners: owners.map(([name, isBoard, currentMonthly], i) => ({ id: ownerIds[i], name, isBoard: isBoard === 1, currentMonthly })),
     units: units.map(([label, type, commonInterest, ownerRef, tags], i) => ({
       id: `unit-${i}`,
       label,

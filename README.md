@@ -9,7 +9,7 @@ policies that decide how each expense is split. The calculator shows annual and 
 - Owners, units, unit types, and expense categories you can edit
 - Flexible split policies: by common interest, equal per unit, or equal per owner, with multi-rule splits (e.g. 5%
   commercial / 95% everyone else)
-- Excluded units (board / sponsor / association owned) pay nothing; their share is absorbed by the rest
+- Board-owned units pay nothing; their share of each expense is spread across all other units by common interest
 - Global adjustments: inflation % on the expense base and a reserve % for savings
 - URL persistence (compressed) so you can bookmark or share a budget
 - JSON export/import

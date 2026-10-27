@@ -24,12 +24,12 @@ export type Policy = {
   rules: PolicyRule[];
 };
 
-// An excluded owner's units pay nothing and are dropped from every split, so the
-// remaining units absorb the cost.
+// At most one owner is the board. Board-owned units pay nothing; their share of each
+// expense is spread across every other unit by common interest.
 export type Owner = {
   id: string;
   name: string;
-  excluded: boolean;
+  isBoard: boolean;
   // What this owner currently pays per month, for comparison against the computed charge.
   currentMonthly: number;
 };

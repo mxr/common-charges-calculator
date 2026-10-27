@@ -38,7 +38,7 @@ export const parseUnitTypeLines = (text: string): ParsedUnitTypes => {
 };
 
 // Each line is "name, current monthly" (comma or tab separated). The amount is optional
-// and may have a $ prefix. Exclusion is not supported in batch input.
+// and may have a $ prefix. The board flag is not supported in batch input.
 export const parseOwnerLines = (text: string): ParsedOwners => {
   const owners: Owner[] = [];
   for (const raw of text.split(/\r?\n/)) {
@@ -47,7 +47,7 @@ export const parseOwnerLines = (text: string): ParsedOwners => {
       continue;
     }
     const amount = Number(amountRaw.replace(/[$,]/g, ""));
-    owners.push({ id: makeId("owner"), name, excluded: false, currentMonthly: Number.isFinite(amount) ? amount : 0 });
+    owners.push({ id: makeId("owner"), name, isBoard: false, currentMonthly: Number.isFinite(amount) ? amount : 0 });
   }
   return { owners, skipped: [] };
 };

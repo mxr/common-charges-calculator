@@ -5,9 +5,11 @@ export type UnitCharge = {
   label: string;
   type: string;
   ownerId: string;
-  excluded: boolean;
+  isBoard: boolean;
   byExpense: Record<string, number>;
   byCategory: Record<string, number>;
+  // Part of `base` taken on from board units, kept out of `byExpense`.
+  board: number;
   base: number;
   offset: number;
   income: number;
@@ -19,7 +21,7 @@ export type UnitCharge = {
 export type OwnerCharge = {
   ownerId: string;
   name: string;
-  excluded: boolean;
+  isBoard: boolean;
   total: number;
   monthly: number;
   currentMonthly: number;
@@ -65,9 +67,10 @@ export const computeCharges = (budget: Budget): ChargeResult => {
         label: unit.label,
         type: unit.type,
         ownerId: unit.ownerId,
-        excluded: Boolean(owner?.excluded),
+        isBoard: Boolean(owner?.isBoard),
         byExpense: {},
         byCategory: {},
+        board: 0,
         base: 0,
         offset: 0,
         income: 0,
@@ -78,7 +81,7 @@ export const computeCharges = (budget: Budget): ChargeResult => {
     };
   });
   const charges = entries.map(({ charge }) => charge);
-  const payingEntries = entries.filter(({ charge }) => !charge.excluded);
+  const payingEntries = entries.filter(({ charge }) => !charge.isBoard);
 
   let unallocated = 0;
   const warnings: string[] = [];
@@ -94,7 +97,7 @@ export const computeCharges = (budget: Budget): ChargeResult => {
 
     for (const rule of policy.rules) {
       const ruleAmount = effective * (rule.weight / 100);
-      const eligible = payingEntries.filter(
+      const eligible = entries.filter(
         ({ unit }) => rule.unitTypes.includes(unit.type) && (rule.tags.length === 0 || rule.tags.some((tag) => unit.tags.includes(tag))),
       );
       if (eligible.length === 0) {
@@ -114,11 +117,38 @@ export const computeCharges = (budget: Budget): ChargeResult => {
     }
   }
 
+  // Board-owned units pay nothing: each expense's board share is spread across every other
+  // unit by common interest (equal split when none carry any), like any shared association cost.
+  const boardEntries = entries.filter(({ charge }) => charge.isBoard);
+  const boardCiSum = payingEntries.reduce((sum, { unit }) => sum + unit.commonInterest, 0);
+  for (const { charge: boardCharge } of boardEntries) {
+    for (const expense of budget.expenses) {
+      const amount = boardCharge.byExpense[expense.id];
+      if (amount === undefined) {
+        continue;
+      }
+      if (payingEntries.length === 0) {
+        unallocated += amount;
+        warnings.push(`Expense "${expense.name}" only applies to board units; ${amount} left unallocated.`);
+        continue;
+      }
+      for (const { unit, charge } of payingEntries) {
+        const share = amount * (boardCiSum > 0 ? unit.commonInterest / boardCiSum : 1 / payingEntries.length);
+        charge.byCategory[expense.category] = (charge.byCategory[expense.category] ?? 0) + share;
+        charge.board += share;
+        charge.base += share;
+      }
+    }
+    boardCharge.byExpense = {};
+    boardCharge.byCategory = {};
+    boardCharge.base = 0;
+  }
+
   // Offsets are a zero-sum rebalance: an affected unit's discount/surcharge is moved
   // onto the unaffected units (by common interest), so the building's total is unchanged.
   let rebalancePool = 0;
   for (const charge of charges) {
-    if (charge.excluded) {
+    if (charge.isBoard) {
       continue;
     }
     const pct = offsetByType.get(charge.type);
@@ -172,7 +202,7 @@ export const computeCharges = (budget: Budget): ChargeResult => {
     return {
       ownerId: owner.id,
       name: owner.name,
-      excluded: owner.excluded,
+      isBoard: owner.isBoard,
       total,
       monthly: total / 12,
       currentMonthly: owner.currentMonthly,

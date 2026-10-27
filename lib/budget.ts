@@ -31,11 +31,11 @@ export const DEFAULT_CATEGORIES = ["Insurance", "Utilities", "Maintenance", "Ser
 
 export const DEFAULT_BUDGET: Budget = {
   owners: [
-    { id: "owner-alice", name: "Alice", excluded: false, currentMonthly: 740 },
-    { id: "owner-bob", name: "Bob", excluded: false, currentMonthly: 1150 },
-    { id: "owner-carol", name: "Carol", excluded: false, currentMonthly: 680 },
-    { id: "owner-llc", name: "Maple Holdings LLC", excluded: false, currentMonthly: 440 },
-    { id: "owner-board", name: "Board", excluded: true, currentMonthly: 0 },
+    { id: "owner-alice", name: "Alice", isBoard: false, currentMonthly: 740 },
+    { id: "owner-bob", name: "Bob", isBoard: false, currentMonthly: 1150 },
+    { id: "owner-carol", name: "Carol", isBoard: false, currentMonthly: 680 },
+    { id: "owner-llc", name: "Maple Holdings LLC", isBoard: false, currentMonthly: 440 },
+    { id: "owner-board", name: "Board", isBoard: true, currentMonthly: 0 },
   ],
   // Several units per type share the same common interest, and types mix owners, so sorting by
   // common interest then label, or owner then number, shows the earlier sort surviving as ties break.
@@ -178,7 +178,8 @@ const normalizeOwner = (value: unknown, index: number): Owner => {
   return {
     id: asString(raw.id) || makeId("owner"),
     name: asString(raw.name) || `Owner ${index + 1}`,
-    excluded: Boolean(raw.excluded),
+    // Budgets saved before the board flag existed marked board owners as `excluded`.
+    isBoard: Boolean(raw.isBoard ?? (raw as { excluded?: unknown }).excluded),
     currentMonthly: asNumber(raw.currentMonthly),
   };
 };
@@ -224,8 +225,11 @@ const normalizeAdjustments = (value: unknown): Adjustments => {
 // Coerce an untrusted parsed object (from URL or imported file) into a valid Budget.
 export const normalizeBudget = (value: unknown): Budget => {
   const raw = (value ?? {}) as Partial<Record<keyof Budget, unknown>>;
+  const owners = Array.isArray(raw.owners) ? raw.owners.map(normalizeOwner) : [];
+  // Only one owner can be the board; keep the first.
+  const boardIndex = owners.findIndex((owner) => owner.isBoard);
   return {
-    owners: Array.isArray(raw.owners) ? raw.owners.map(normalizeOwner) : [],
+    owners: owners.map((owner, i) => (owner.isBoard && i !== boardIndex ? { ...owner, isBoard: false } : owner)),
     units: Array.isArray(raw.units) ? raw.units.map(normalizeUnit) : [],
     unitTypes: normalizeUnitTypes(raw.unitTypes),
     categories: asStringArray(raw.categories),
