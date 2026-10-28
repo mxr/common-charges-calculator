@@ -238,6 +238,7 @@ function HomeContent() {
 
   const [dragCategory, setDragCategory] = useState<string | null>(null);
   const [dragPolicy, setDragPolicy] = useState<string | null>(null);
+  const [dragRule, setDragRule] = useState<{ policyId: string; index: number } | null>(null);
   // Per-category display sort. `expenseOrder` holds the saved id order per category (absent = entry
   // order); `expenseSort` just tracks the active key/dir for the arrow indicator. Clicking a key
   // cycles asc -> desc -> off. Each sort runs on the current display order, so sorting by one key
@@ -442,6 +443,23 @@ function HomeContent() {
 
   const movePolicy = (from: string, to: string, after: boolean) =>
     patch((draft) => ({ ...draft, policies: moveItem(draft.policies, from, to, after) }));
+
+  const moveRule = (policyId: string, from: number, to: number) =>
+    patch((draft) => ({
+      ...draft,
+      policies: draft.policies.map((p) => {
+        if (p.id !== policyId) {
+          return p;
+        }
+        const rules = [...p.rules];
+        const [rule] = rules.splice(from, 1);
+        if (!rule) {
+          return p;
+        }
+        rules.splice(to, 0, rule);
+        return { ...p, rules };
+      }),
+    }));
 
   // True when the drag pointer is past the vertical midpoint of the hovered row (insert after, not before).
   const isAfterMidpoint = (event: React.DragEvent<HTMLElement>) => {
@@ -1377,12 +1395,12 @@ function HomeContent() {
                     patch((draft) => ({
                       ...draft,
                       policies: [
-                        ...draft.policies,
                         {
                           id: makeId("policy"),
                           name: "New policy",
                           rules: [{ unitTypes: [], tags: [], weight: 100, method: "common_interest" }],
                         },
+                        ...draft.policies,
                       ],
                     }))
                   }
@@ -1472,10 +1490,49 @@ function HomeContent() {
                           </p>
                           <div className="mt-3 flex flex-col gap-3">
                             {policy.rules.map((rule, ruleIndex) => (
-                              // biome-ignore lint/suspicious/noArrayIndexKey: rules are positional and have no stable id
-                              <div key={`${policy.id}-rule-${ruleIndex}`} className="rounded-xl border border-[#eee0d1] bg-white/70 p-3">
+                              // biome-ignore lint/a11y/noStaticElementInteractions: native drag-and-drop reorder target
+                              <div
+                                // biome-ignore lint/suspicious/noArrayIndexKey: rules are positional and have no stable id
+                                key={`${policy.id}-rule-${ruleIndex}`}
+                                data-rule
+                                className={`rounded-xl border border-[#eee0d1] bg-white/70 p-3 transition-opacity ${dragRule?.policyId === policy.id && dragRule.index === ruleIndex ? "opacity-40" : ""}`}
+                                onDragOver={(event) => {
+                                  if (dragRule?.policyId === policy.id) {
+                                    event.preventDefault();
+                                    const after = isAfterMidpoint(event);
+                                    // Only move once the pointer crosses the midpoint toward the dragged rule's destination, so rows don't flicker.
+                                    if ((dragRule.index < ruleIndex && after) || (dragRule.index > ruleIndex && !after)) {
+                                      moveRule(policy.id, dragRule.index, ruleIndex);
+                                      setDragRule({ policyId: policy.id, index: ruleIndex });
+                                    }
+                                  }
+                                }}
+                                onDrop={(event) => {
+                                  event.preventDefault();
+                                  setDragRule(null);
+                                }}
+                              >
                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                   <div className="flex flex-wrap items-center gap-3">
+                                    {policy.rules.length > 1 ? (
+                                      // biome-ignore lint/a11y/noStaticElementInteractions: drag handle
+                                      <span
+                                        draggable
+                                        onDragStart={(event) => {
+                                          event.stopPropagation();
+                                          setDragRule({ policyId: policy.id, index: ruleIndex });
+                                          const row = (event.currentTarget as HTMLElement).closest("[data-rule]");
+                                          if (row) {
+                                            event.dataTransfer.setDragImage(row, 20, 16);
+                                          }
+                                        }}
+                                        onDragEnd={() => setDragRule(null)}
+                                        className="cursor-grab select-none text-[#b3a392]"
+                                        title="Drag to reorder rule"
+                                      >
+                                        ☰
+                                      </span>
+                                    ) : null}
                                     <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-[#4a4037]">
                                       allocation %
                                       <PercentField
