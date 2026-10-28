@@ -1458,7 +1458,7 @@ function HomeContent() {
                                 ☰
                               </span>
                               <TextField
-                                className={`${field} max-w-sm`}
+                                className={`${fieldBase} w-96 max-w-full`}
                                 value={policy.name}
                                 onChange={(next) =>
                                   patch((draft) => ({
