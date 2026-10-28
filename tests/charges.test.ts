@@ -1,6 +1,6 @@
 import { compressToEncodedURIComponent } from "lz-string";
 import { describe, expect, it } from "vitest";
-import { computeCharges } from "../lib/allocate";
+import { computeCharges, reconcileCharges } from "../lib/allocate";
 import { DEFAULT_BUDGET, makeId, normalizeBudget, validateBudget } from "../lib/budget";
 import { formatCurrency, formatPercent, toNumber } from "../lib/format";
 import { parseOwnerLines, parseUnitLines, parseUnitTypeLines } from "../lib/parse";
@@ -347,6 +347,31 @@ describe("computeCharges edge cases and totals", () => {
     expect(categorySum).toBeCloseTo(result.totals.base);
     const ownerSum = result.perOwner.reduce((sum, entry) => sum + entry.total, 0);
     expect(ownerSum).toBeCloseTo(result.totals.total);
+  });
+});
+
+describe("reconcileCharges", () => {
+  it("matches monthly charges to expenses after every adjustment", () => {
+    const budget = makeBudget({
+      owners: [owner("o1"), owner("board", true)],
+      units: [unit("u1", "residential", 50, "o1"), unit("u2", "commercial", 30, "o1"), unit("u3", "residential", 20, "board")],
+      adjustments: { inflationPct: 10, reservePct: 5, incomeOffset: 20, offsets: [{ unitType: "commercial", pct: -10 }] },
+    });
+    const check = reconcileCharges(budget, computeCharges(budget));
+    expect(check.expected).toBeCloseTo((110 - 20) * 1.05);
+    expect(check.collected).toBeCloseTo(check.expected);
+    expect(check.matches).toBe(true);
+  });
+
+  it("flags a mismatch when money is left unallocated", () => {
+    const budget = makeBudget({
+      expenses: [
+        { id: "e", name: "exp", category: "general", amount: 100, policyId: "p" },
+        { id: "e2", name: "orphan", category: "general", amount: 40, policyId: "" },
+      ],
+    });
+    const check = reconcileCharges(budget, computeCharges(budget));
+    expect(check).toEqual({ expected: 140, collected: 100, matches: false });
   });
 });
 

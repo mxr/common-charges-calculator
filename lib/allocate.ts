@@ -219,3 +219,21 @@ export const computeCharges = (budget: Budget): ChargeResult => {
     warnings,
   };
 };
+
+export type Reconciliation = {
+  // Entered expenses after inflation, less other income, plus reserve.
+  expected: number;
+  // Every unit's monthly charge times 12.
+  collected: number;
+  matches: boolean;
+};
+
+// Recomputes the year's total from the budget alone and checks it against what the units are billed.
+// Offsets and the board share only move money between units, so they do not change the expected total.
+export const reconcileCharges = (budget: Budget, result: ChargeResult): Reconciliation => {
+  const inflationFactor = 1 + budget.adjustments.inflationPct / 100;
+  const expenses = budget.expenses.reduce((sum, expense) => sum + expense.amount, 0) * inflationFactor;
+  const expected = (expenses - (budget.adjustments.incomeOffset ?? 0)) * (1 + budget.adjustments.reservePct / 100);
+  const collected = result.perUnit.reduce((sum, charge) => sum + charge.monthly * 12, 0);
+  return { expected, collected, matches: Math.abs(expected - collected) < 0.01 };
+};

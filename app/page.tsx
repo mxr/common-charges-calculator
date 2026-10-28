@@ -2,7 +2,7 @@
 
 import { usePathname, useSearchParams } from "next/navigation";
 import { Fragment, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
-import { computeCharges } from "../lib/allocate";
+import { computeCharges, reconcileCharges } from "../lib/allocate";
 import { DEFAULT_BUDGET, makeId, normalizeTags, validateBudget } from "../lib/budget";
 import { formatCurrency } from "../lib/format";
 import { parseOwnerLines, parseUnitLines, parseUnitTypeLines } from "../lib/parse";
@@ -116,6 +116,7 @@ function HomeContent() {
     .filter(Boolean)
     .join(",");
   const result = useMemo(() => computeCharges(budget), [budget]);
+  const reconciliation = reconcileCharges(budget, result);
   const warnings = useMemo(() => validateBudget(budget), [budget]);
   const ciSum = budget.units.reduce((sum, unit) => sum + unit.commonInterest, 0);
 
@@ -2094,6 +2095,14 @@ function HomeContent() {
                 {result.unallocated > 0.01 ? (
                   <span className="font-semibold text-[#b44b43]">{formatCurrency(result.unallocated)} unallocated.</span>
                 ) : null}
+              </p>
+              <p
+                className={`mt-3 rounded-xl border px-3 py-2 text-sm ${reconciliation.matches ? "border-[#cfe3d3] bg-[#f1f8f2] text-[#3f7a52]" : "border-[#f0c8c6] bg-[#fdf1f0] text-[#b44b43]"}`}
+              >
+                {reconciliation.matches ? "✓" : "✗"} Monthly charges × 12 = {formatCurrency(reconciliation.collected)}/yr,{" "}
+                {reconciliation.matches
+                  ? "matching expenses after adjustments."
+                  : `but expenses after adjustments come to ${formatCurrency(reconciliation.expected)}/yr (${formatCurrency(Math.abs(reconciliation.expected - reconciliation.collected))} ${reconciliation.collected < reconciliation.expected ? "short" : "over"}).`}
               </p>
               <div className={`mt-4 grid items-start gap-4 ${showBreakdown ? "" : "md:grid-cols-2 lg:grid-cols-3"}`}>
                 {sortedPerOwner.map((owner) => {
