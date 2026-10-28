@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import { computeCharges } from "../lib/allocate";
 import { DEFAULT_BUDGET, makeId, normalizeTags, validateBudget } from "../lib/budget";
 import { formatCurrency } from "../lib/format";
@@ -30,7 +30,7 @@ import {
 import { ALLOCATION_METHOD_LABELS, ALLOCATION_METHODS, UNIT_CLASSIFICATION_LABELS, UNIT_CLASSIFICATIONS } from "../lib/types";
 import type { UnitCharge } from "../lib/allocate";
 import type { ExpenseSortKey, OwnerSortKey, SortState, UnitFilter, UnitSortKey, UnitTypeSortKey } from "../lib/sort";
-import type { Budget, Owner, Unit, UnitClassification, UnitType } from "../lib/types";
+import type { Budget, Expense, Owner, Unit, UnitClassification, UnitType } from "../lib/types";
 
 const card = "rounded-3xl border border-[#e7d7c8] bg-white/80 p-6 shadow-[0_20px_60px_rgba(120,96,77,0.12)] backdrop-blur";
 const sectionTitle = "text-2xl font-semibold text-[#181716]";
@@ -635,6 +635,10 @@ function HomeContent() {
 
   const expenseCategories = [...new Set([...budget.categories, ...budget.expenses.map((expense) => expense.category)])];
   const catKey = (cat: string) => `e:${cat}`;
+  const groupByCategory = (expenses: Expense[]) =>
+    expenseCategories
+      .map((category) => ({ category, items: expenses.filter((expense) => expense.category === category) }))
+      .filter((group) => group.items.length > 0);
   const allCategoriesCollapsed = expenseCategories.length > 0 && expenseCategories.every((cat) => collapsedTypes.has(catKey(cat)));
   const toggleAllCategories = () =>
     setCollapsedTypes((prev) => {
@@ -1487,13 +1491,20 @@ function HomeContent() {
                             return used.length > 0 ? (
                               <div className="mt-2 text-xs text-[#5b5148]">
                                 <p>Used by:</p>
-                                <ul className="mt-1 grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-x-4 gap-y-1">
-                                  {used.map((e) => (
-                                    <li key={e.id} className="truncate" title={e.name || "(unnamed)"}>
-                                      {e.name || "(unnamed)"}
-                                    </li>
+                                <div className="mt-1 grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-x-4 gap-y-2">
+                                  {groupByCategory(used).map((group) => (
+                                    <div key={group.category} className="min-w-0">
+                                      <p className={breakdownSubheading}>{group.category || "—"}</p>
+                                      <ul className="flex flex-col gap-0.5">
+                                        {group.items.map((e) => (
+                                          <li key={e.id} className="truncate" title={e.name || "(unnamed)"}>
+                                            {e.name || "(unnamed)"}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
                                   ))}
-                                </ul>
+                                </div>
                               </div>
                             ) : (
                               <p className="mt-2 text-xs text-[#5b5148]">Not used by any expense.</p>
@@ -2170,15 +2181,24 @@ function HomeContent() {
                                               </td>
                                             </tr>
                                           ) : null}
-                                          {rows.map((expense) => (
-                                            <tr key={expense.id} className="border-t border-[#f2e8dd]">
-                                              <td className="py-1 pr-3">{expenseName.get(expense.id)}</td>
-                                              {units.map((u) => (
-                                                <td key={u.unitId} className="whitespace-nowrap py-1 pl-3 text-right">
-                                                  {formatCurrency((u.byExpense[expense.id] ?? 0) / 12)}
+                                          {groupByCategory(rows).map((group) => (
+                                            <Fragment key={group.category}>
+                                              <tr className="border-t border-[#f2e8dd]">
+                                                <td colSpan={units.length + 1} className="pt-2 pb-1 pr-3 font-semibold text-[#1d1b18]">
+                                                  {group.category || "—"}
                                                 </td>
+                                              </tr>
+                                              {group.items.map((expense) => (
+                                                <tr key={expense.id} className="border-t border-[#f2e8dd]">
+                                                  <td className="py-1 pr-3 pl-3">{expenseName.get(expense.id)}</td>
+                                                  {units.map((u) => (
+                                                    <td key={u.unitId} className="whitespace-nowrap py-1 pl-3 text-right">
+                                                      {formatCurrency((u.byExpense[expense.id] ?? 0) / 12)}
+                                                    </td>
+                                                  ))}
+                                                </tr>
                                               ))}
-                                            </tr>
+                                            </Fragment>
                                           ))}
                                           {showBoard || showOffset || showIncome || showReserve ? (
                                             <tr>
