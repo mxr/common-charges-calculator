@@ -193,7 +193,7 @@ function HomeContent() {
     const id = makeId("unit");
     patch((draft) => ({
       ...draft,
-      units: [...draft.units, { id, label: "New unit", type, commonInterest: 0, ownerId: draft.owners[0]?.id ?? "", tags: [] }],
+      units: [...draft.units, { id, label: "New unit", type, commonInterest: 0, ownerId: "", tags: [] }],
     }));
     setAddingUnit(false);
     window.setTimeout(() => document.getElementById(`unit-label-${id}`)?.focus(), 0);
