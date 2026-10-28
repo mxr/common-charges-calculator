@@ -1,4 +1,4 @@
-import type { Expense, Owner, Unit, UnitClassification, UnitType } from "./types";
+import type { Expense, Owner, Policy, Unit, UnitClassification, UnitType } from "./types";
 
 export type ExpenseSortKey = "name" | "amount";
 
@@ -95,6 +95,16 @@ export function compareUnitTypes(a: UnitType, b: UnitType, key: UnitTypeSortKey,
 // Units by type name, then natural label order (Commercial CU1, CU2 before Residential 2A, 2B).
 function compareUnitsByTypeThenLabel(a: Unit, b: Unit): number {
   return a.type.localeCompare(b.type) || a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" });
+}
+
+// Order policies by the total amount of the expenses assigned to them, most expensive first. Ties
+// keep their current order.
+export function sortPoliciesByAssigned(policies: Policy[], expenses: Expense[]): Policy[] {
+  const assigned = new Map<string, number>();
+  for (const expense of expenses) {
+    assigned.set(expense.policyId, (assigned.get(expense.policyId) ?? 0) + expense.amount);
+  }
+  return [...policies].sort((a, b) => (assigned.get(b.id) ?? 0) - (assigned.get(a.id) ?? 0));
 }
 
 // Order owners by their first primary unit (falling back to ancillary when they own no primary
