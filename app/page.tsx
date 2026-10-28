@@ -1482,12 +1482,23 @@ function HomeContent() {
                               </button>
                             </div>
                           </div>
-                          <p className="mt-2 text-xs text-[#5b5148]">
-                            {(() => {
-                              const used = budget.expenses.filter((e) => e.policyId === policy.id).map((e) => e.name || "(unnamed)");
-                              return used.length > 0 ? `Used by: ${used.join(", ")}` : "Not used by any expense.";
-                            })()}
-                          </p>
+                          {(() => {
+                            const used = budget.expenses.filter((e) => e.policyId === policy.id);
+                            return used.length > 0 ? (
+                              <div className="mt-2 text-xs text-[#5b5148]">
+                                <p>Used by:</p>
+                                <ul className="mt-1 grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-x-4 gap-y-1">
+                                  {used.map((e) => (
+                                    <li key={e.id} className="truncate" title={e.name || "(unnamed)"}>
+                                      {e.name || "(unnamed)"}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : (
+                              <p className="mt-2 text-xs text-[#5b5148]">Not used by any expense.</p>
+                            );
+                          })()}
                           <div className="mt-3 flex flex-col gap-3">
                             {policy.rules.map((rule, ruleIndex) => (
                               // biome-ignore lint/a11y/noStaticElementInteractions: native drag-and-drop reorder target
