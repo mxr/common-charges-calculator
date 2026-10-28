@@ -12,8 +12,9 @@ import {
   passesUnitFilter,
   serializeSortParam,
   sortOwnersByPrimaryUnit,
+  sortPoliciesByAssigned,
 } from "../lib/sort";
-import type { Expense, Owner, Unit, UnitClassification, UnitType } from "../lib/types";
+import type { Expense, Owner, Policy, Unit, UnitClassification, UnitType } from "../lib/types";
 
 const u = (id: string, label: string, type: string, ci: number, ownerId = ""): Unit => ({
   id,
@@ -231,5 +232,21 @@ describe("sortOwnersByPrimaryUnit", () => {
       "none",
       "none2",
     ]);
+  });
+});
+
+describe("sortPoliciesByAssigned", () => {
+  const p = (id: string): Policy => ({ id, name: id, rules: [] });
+
+  it("orders by assigned expense total descending, keeping ties and unused policies in place", () => {
+    const policies = [p("none"), p("small"), p("big"), p("tie"), p("none2")];
+    const expenses = [
+      e("1", "a", 100, "small"),
+      e("2", "b", 300, "big"),
+      e("3", "c", 200, "big"),
+      e("4", "d", 100, "tie"),
+      e("5", "x", 999, ""),
+    ];
+    expect(sortPoliciesByAssigned(policies, expenses).map((policy) => policy.id)).toEqual(["big", "small", "tie", "none", "none2"]);
   });
 });

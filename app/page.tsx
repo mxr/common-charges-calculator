@@ -22,6 +22,7 @@ import {
   passesUnitFilter,
   serializeSortParam,
   sortOwnersByPrimaryUnit,
+  sortPoliciesByAssigned,
   UNIT_FILTER_LABELS,
   UNIT_FILTERS,
   UNIT_SORT_LABELS,
@@ -1612,25 +1613,36 @@ function HomeContent() {
                   Policies
                   <span className="text-sm font-normal text-[#9a8a7b]">({budget.policies.length})</span>
                 </button>
-                <button
-                  type="button"
-                  className={pillButton}
-                  onClick={() =>
-                    patch((draft) => ({
-                      ...draft,
-                      policies: [
-                        {
-                          id: makeId("policy"),
-                          name: "New policy",
-                          rules: [{ unitTypes: [], tags: [], weight: 100, method: "common_interest" }],
-                        },
-                        ...draft.policies,
-                      ],
-                    }))
-                  }
-                >
-                  Add policy
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {budget.policies.length > 1 ? (
+                    <button
+                      type="button"
+                      className={pillButton}
+                      onClick={() => patch((draft) => ({ ...draft, policies: sortPoliciesByAssigned(draft.policies, draft.expenses) }))}
+                    >
+                      Sort by assigned
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className={pillButton}
+                    onClick={() =>
+                      patch((draft) => ({
+                        ...draft,
+                        policies: [
+                          {
+                            id: makeId("policy"),
+                            name: "New policy",
+                            rules: [{ unitTypes: [], tags: [], weight: 100, method: "common_interest" }],
+                          },
+                          ...draft.policies,
+                        ],
+                      }))
+                    }
+                  >
+                    Add policy
+                  </button>
+                </div>
               </div>
               {collapsedPolicies ? null : (
                 <>
