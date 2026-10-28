@@ -1534,7 +1534,7 @@ function HomeContent() {
                                       </span>
                                     ) : null}
                                     <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-[#4a4037]">
-                                      allocation %
+                                      %
                                       <PercentField
                                         className={`${fieldBase} w-16`}
                                         value={rule.weight}
