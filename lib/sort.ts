@@ -1,11 +1,10 @@
 import type { Expense, Owner, Unit, UnitClassification, UnitType } from "./types";
 
-export type ExpenseSortKey = "name" | "amount" | "split";
+export type ExpenseSortKey = "name" | "amount";
 
 export const EXPENSE_SORT_LABELS: Record<ExpenseSortKey, string> = {
   name: "Name",
   amount: "Amount",
-  split: "Split",
 };
 
 export type UnitSortKey = "label" | "ci";
@@ -61,14 +60,12 @@ export function nextSortDir<K>(current: SortState<K> | undefined, key: K): "asc"
   return current.dir === "asc" ? "desc" : null;
 }
 
-export function compareExpenses(a: Expense, b: Expense, key: ExpenseSortKey, dir: "asc" | "desc", policyName: Map<string, string>): number {
+export function compareExpenses(a: Expense, b: Expense, key: ExpenseSortKey, dir: "asc" | "desc"): number {
   const factor = dir === "asc" ? 1 : -1;
   if (key === "amount") {
     return (a.amount - b.amount) * factor;
   }
-  const av = key === "name" ? a.name : (policyName.get(a.policyId) ?? "");
-  const bv = key === "name" ? b.name : (policyName.get(b.policyId) ?? "");
-  return av.localeCompare(bv) * factor;
+  return a.name.localeCompare(b.name) * factor;
 }
 
 export function compareUnits(a: Unit, b: Unit, key: UnitSortKey, dir: "asc" | "desc"): number {
@@ -185,7 +182,7 @@ export function parseSortParam(raw: string): SortParam {
       }
     } else if (parts[0] === "e" && parts.length === 4) {
       const [, category = "", key, dir] = parts;
-      if ((key === "name" || key === "amount" || key === "split") && (dir === "asc" || dir === "desc")) {
+      if ((key === "name" || key === "amount") && (dir === "asc" || dir === "desc")) {
         result.expenses[decodeURIComponent(category)] = { key, dir };
       }
     }

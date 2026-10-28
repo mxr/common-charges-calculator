@@ -70,28 +70,10 @@ describe("compareOwners / compareUnitTypes / compareExpenses", () => {
     ]);
   });
 
-  it("compareExpenses by amount and split (policy name)", () => {
+  it("compareExpenses by amount and name", () => {
     const expenses = [e("1", "Insurance", 500, "pA"), e("2", "Water", 100, "pB"), e("3", "Heat", 200, "pA")];
-    const policyName = new Map([
-      ["pA", "Zeta"],
-      ["pB", "Alpha"],
-    ]);
-    expect([...expenses].sort((a, b) => compareExpenses(a, b, "amount", "asc", policyName)).map((x) => x.amount)).toEqual([100, 200, 500]);
-    expect([...expenses].sort((a, b) => compareExpenses(a, b, "split", "asc", policyName)).map((x) => x.name)).toEqual([
-      "Water",
-      "Insurance",
-      "Heat",
-    ]);
-    expect([...expenses].sort((a, b) => compareExpenses(a, b, "name", "desc", policyName)).map((x) => x.name)).toEqual([
-      "Water",
-      "Insurance",
-      "Heat",
-    ]);
-    expect([...expenses].sort((a, b) => compareExpenses(a, b, "split", "asc", new Map())).map((x) => x.name)).toEqual([
-      "Insurance",
-      "Water",
-      "Heat",
-    ]);
+    expect([...expenses].sort((a, b) => compareExpenses(a, b, "amount", "asc")).map((x) => x.amount)).toEqual([100, 200, 500]);
+    expect([...expenses].sort((a, b) => compareExpenses(a, b, "name", "desc")).map((x) => x.name)).toEqual(["Water", "Insurance", "Heat"]);
   });
 });
 
@@ -122,7 +104,7 @@ describe("parseSortParam", () => {
   });
 
   it("round-trips via serializeSortParam", () => {
-    const raw = "o:currentMonthly:desc,u:label:desc,ut:name:desc,e:General:amount:desc,e:Other:split:asc";
+    const raw = "o:currentMonthly:desc,u:label:desc,ut:name:desc,e:General:amount:desc,e:Other:name:asc";
     const parsed = parseSortParam(raw);
     expect(serializeSortParam(parsed.owner, parsed.unit, parsed.unitType, parsed.expenses)).toBe(raw);
   });

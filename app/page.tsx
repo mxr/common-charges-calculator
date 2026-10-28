@@ -231,7 +231,7 @@ function HomeContent() {
     const id = makeId("exp");
     patch((draft) => ({
       ...draft,
-      expenses: [...draft.expenses, { id, name: "", category, amount: 0, policyId: draft.policies[0]?.id ?? "" }],
+      expenses: [...draft.expenses, { id, name: "", category, amount: 0, policyId: "" }],
     }));
     window.setTimeout(() => document.getElementById(`expense-name-${id}`)?.focus(), 0);
   };
@@ -239,20 +239,21 @@ function HomeContent() {
   const [dragCategory, setDragCategory] = useState<string | null>(null);
   const [dragPolicy, setDragPolicy] = useState<string | null>(null);
   const [dragRule, setDragRule] = useState<{ policyId: string; index: number } | null>(null);
+  // Which policy card is showing its expense checklist instead of the read-only "Used by" list.
+  const [editingPolicyExpenses, setEditingPolicyExpenses] = useState<string | null>(null);
   // Per-category display sort. `expenseOrder` holds the saved id order per category (absent = entry
   // order); `expenseSort` just tracks the active key/dir for the arrow indicator. Clicking a key
   // cycles asc -> desc -> off. Each sort runs on the current display order, so sorting by one key
   // then another keeps the earlier sort as a stable tiebreaker.
   const [expenseSort, setExpenseSort] = useState<Record<string, SortState<ExpenseSortKey>>>(sortInit.expenses);
   const [expenseOrder, setExpenseOrder] = useState<Record<string, string[]>>(() => {
-    const policyName = new Map(budget.policies.map((policy) => [policy.id, policy.name]));
     const orders: Record<string, string[]> = {};
     for (const [category, sort] of Object.entries(sortInit.expenses)) {
       orders[category] = deriveOrder(
         budget.expenses.filter((expense) => expense.category === category),
         [],
         (expense) => expense.id,
-        (a, b) => compareExpenses(a, b, sort.key, sort.dir, policyName),
+        (a, b) => compareExpenses(a, b, sort.key, sort.dir),
       );
     }
     return orders;
@@ -272,12 +273,11 @@ function HomeContent() {
       });
       return;
     }
-    const policyName = new Map(budget.policies.map((policy) => [policy.id, policy.name]));
     const order = deriveOrder(
       budget.expenses.filter((expense) => expense.category === category),
       expenseOrder[category] ?? [],
       (expense) => expense.id,
-      (a, b) => compareExpenses(a, b, key, dir, policyName),
+      (a, b) => compareExpenses(a, b, key, dir),
     );
     setExpenseOrder((prev) => ({ ...prev, [category]: order }));
     setExpenseSort((prev) => ({ ...prev, [category]: { key, dir } }));
@@ -1380,6 +1380,195 @@ function HomeContent() {
 
         {activeTab === "rules" ? (
           <>
+            {/* Expenses */}
+            <section className={card}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  className={`${sectionTitle} flex items-center gap-2`}
+                  onClick={() => setCollapsedExpenses((value) => !value)}
+                >
+                  <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedExpenses ? "▸" : "▾"}</span>
+                  Expenses
+                  <span className="text-sm font-normal text-[#9a8a7b]">({budget.expenses.length})</span>
+                </button>
+                {!collapsedExpenses && expenseCategories.length > 0 ? (
+                  <button type="button" className={pillButton} onClick={toggleAllCategories}>
+                    {allCategoriesCollapsed ? "Expand all" : "Collapse all"}
+                  </button>
+                ) : null}
+              </div>
+              {collapsedExpenses ? null : (
+                <>
+                  <p className={`${sectionHint} mt-1`}>
+                    Grouped by category. Each line item is a per-year cost. Assign each one to a policy below to decide how it is split.
+                    Drag the ☰ handle to reorder categories, or sort the line items within a category by name or amount.
+                  </p>
+                  <div className="mt-4 flex flex-col gap-5">
+                    {expenseCategories.map((category) => {
+                      const sort = expenseSort[category];
+                      const items = applyOrder(
+                        budget.expenses.filter((expense) => expense.category === category),
+                        expenseOrder[category] ?? [],
+                        (expense) => expense.id,
+                      );
+                      const catCollapsed = collapsedTypes.has(catKey(category));
+                      const categoryTotal = items.reduce((sum, e) => sum + e.amount, 0);
+                      return (
+                        // biome-ignore lint/a11y/noStaticElementInteractions: native drag-and-drop reorder target
+                        <div
+                          key={category}
+                          data-cat={category}
+                          className={`flex flex-col gap-2 transition-opacity ${dragCategory === category ? "opacity-40" : ""}`}
+                          onDragOver={(event) => {
+                            if (dragCategory) {
+                              event.preventDefault();
+                              if (dragCategory !== category) {
+                                moveCategory(dragCategory, category, isAfterMidpoint(event));
+                              }
+                            }
+                          }}
+                          onDrop={(event) => {
+                            event.preventDefault();
+                            setDragCategory(null);
+                          }}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              {/* biome-ignore lint/a11y/noStaticElementInteractions: drag handle */}
+                              <span
+                                draggable
+                                onDragStart={(event) => {
+                                  setDragCategory(category);
+                                  const group = (event.currentTarget as HTMLElement).closest("[data-cat]");
+                                  if (group) {
+                                    event.dataTransfer.setDragImage(group, 20, 16);
+                                  }
+                                }}
+                                onDragEnd={() => setDragCategory(null)}
+                                className="cursor-grab select-none text-[#b3a392]"
+                                title={`Drag to reorder category ${category}`}
+                              >
+                                ☰
+                              </span>
+                              <button
+                                type="button"
+                                className="flex items-center"
+                                aria-label={catCollapsed ? `Expand ${category}` : `Collapse ${category}`}
+                                onClick={() => toggleType(catKey(category))}
+                              >
+                                <span className="text-lg leading-none text-[#8c7b6c]">{catCollapsed ? "▸" : "▾"}</span>
+                              </button>
+                              <CategoryName category={category} onRename={renameCategory} />
+                              {catCollapsed && items.length > 0 ? (
+                                <span className="text-xs text-[#9a8a7b]">
+                                  {items.length} item{items.length !== 1 ? "s" : ""} &middot; {formatCurrency(categoryTotal)}/yr
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {!catCollapsed && items.length > 1 ? <span className={groupHeading}>Sort by</span> : null}
+                              {!catCollapsed && items.length > 1 ? (
+                                <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                                  {(["name", "amount"] as ExpenseSortKey[]).map((key) => {
+                                    const active = sort?.key === key;
+                                    return (
+                                      <button
+                                        key={key}
+                                        type="button"
+                                        className={`px-2.5 py-1 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                                        aria-label={`Sort ${category} by ${EXPENSE_SORT_LABELS[key].toLowerCase()}${active ? ` (${sort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
+                                        onClick={() => cycleExpenseSort(category, key)}
+                                      >
+                                        {EXPENSE_SORT_LABELS[key]}
+                                        {active ? (sort.dir === "asc" ? " ↑" : " ↓") : ""}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              ) : null}
+                              <button
+                                type="button"
+                                className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                aria-label={`Remove category ${category}`}
+                                onClick={() =>
+                                  patch((draft) => ({
+                                    ...draft,
+                                    categories: draft.categories.filter((item) => item !== category),
+                                    expenses: draft.expenses.filter((expense) => expense.category !== category),
+                                  }))
+                                }
+                              >
+                                <TrashIcon />
+                              </button>
+                            </div>
+                          </div>
+                          {!catCollapsed && !dragCategory && items.length > 0 ? (
+                            <div className="grid gap-x-6 gap-y-2 lg:grid-cols-2">
+                              {items.map((expense, expenseIndex) => (
+                                <div key={expense.id} className="grid grid-cols-[1fr_9rem_auto] items-center gap-2">
+                                  <TextField
+                                    id={`expense-name-${expense.id}`}
+                                    className={field}
+                                    value={expense.name}
+                                    placeholder="New expense"
+                                    onChange={(next) =>
+                                      patch((draft) => ({
+                                        ...draft,
+                                        expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, name: next } : e)),
+                                      }))
+                                    }
+                                  />
+                                  <CurrencyField
+                                    className={field}
+                                    value={expense.amount}
+                                    onChange={(next) =>
+                                      patch((draft) => ({
+                                        ...draft,
+                                        expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, amount: next } : e)),
+                                      }))
+                                    }
+                                    onTabOut={expenseIndex === items.length - 1 ? () => addExpenseAndFocus(category) : undefined}
+                                  />
+                                  <button
+                                    type="button"
+                                    className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                    aria-label="Remove expense"
+                                    onClick={() =>
+                                      patch((draft) => ({ ...draft, expenses: draft.expenses.filter((e) => e.id !== expense.id) }))
+                                    }
+                                  >
+                                    <TrashIcon />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                          {!catCollapsed && !dragCategory && (
+                            <button type="button" className={`${pillButton} self-start`} onClick={() => addExpenseAndFocus(category)}>
+                              Add expense
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <InlineAdd
+                      placeholder="Add category"
+                      onAdd={(value) =>
+                        patch((draft) =>
+                          draft.categories.includes(value) ? draft : { ...draft, categories: [...draft.categories, value] },
+                        )
+                      }
+                    />
+                    <div className="mt-2 flex items-center justify-between border-t border-[#eadccb] pt-3 text-sm font-semibold text-[#181716]">
+                      <span>Total expenses</span>
+                      <span>{formatCurrency(budget.expenses.reduce((sum, expense) => sum + expense.amount, 0))}/yr</span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </section>
+
             {/* Policies */}
             <section className={card}>
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1415,7 +1604,8 @@ function HomeContent() {
               {collapsedPolicies ? null : (
                 <>
                   <p className={`${sectionHint} mt-1`}>
-                    Each rule takes an allocation % of the expense and splits it among the selected unit types.
+                    Each rule takes a % of the expense and splits it among the selected unit types. Pick which expenses each policy applies
+                    to.
                   </p>
                   <div className="mt-4 flex flex-col gap-4">
                     {budget.policies.map((policy) => {
@@ -1488,26 +1678,66 @@ function HomeContent() {
                           </div>
                           {(() => {
                             const used = budget.expenses.filter((e) => e.policyId === policy.id);
-                            return used.length > 0 ? (
+                            const editing = editingPolicyExpenses === policy.id;
+                            const shown = editing ? budget.expenses : used;
+                            return (
                               <div className="mt-2 text-xs text-[#5b5148]">
-                                <p>Used by:</p>
-                                <div className="mt-1 grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-x-4 gap-y-2">
-                                  {groupByCategory(used).map((group) => (
-                                    <div key={group.category} className="min-w-0">
-                                      <p className="pb-0.5 font-semibold text-[#1d1b18]">{group.category || "—"}</p>
-                                      <ul className="flex flex-col gap-0.5">
-                                        {group.items.map((e) => (
-                                          <li key={e.id} className="truncate" title={e.name || "(unnamed)"}>
-                                            {e.name || "(unnamed)"}
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  ))}
+                                <div className="flex items-center gap-2">
+                                  <p>{used.length > 0 || editing ? "Used by:" : "Not used by any expense."}</p>
+                                  {budget.expenses.length > 0 ? (
+                                    <button
+                                      type="button"
+                                      className="font-semibold text-[#1d1b18] underline"
+                                      onClick={() => setEditingPolicyExpenses(editing ? null : policy.id)}
+                                    >
+                                      {editing ? "Done" : "Edit"}
+                                    </button>
+                                  ) : null}
                                 </div>
+                                {shown.length > 0 ? (
+                                  <div className="mt-1 grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-x-4 gap-y-2">
+                                    {groupByCategory(shown).map((group) => (
+                                      <div key={group.category} className="min-w-0">
+                                        <p className="pb-0.5 font-semibold text-[#1d1b18]">{group.category || "—"}</p>
+                                        <ul className="flex flex-col gap-0.5">
+                                          {group.items.map((e) =>
+                                            editing ? (
+                                              <li key={e.id} className="min-w-0">
+                                                <label className="flex items-start gap-1.5" title={e.name || "(unnamed)"}>
+                                                  <input
+                                                    type="checkbox"
+                                                    className="mt-0.5"
+                                                    checked={e.policyId === policy.id}
+                                                    onChange={(event) => {
+                                                      const policyId = event.target.checked ? policy.id : "";
+                                                      patch((draft) => ({
+                                                        ...draft,
+                                                        expenses: draft.expenses.map((x) => (x.id === e.id ? { ...x, policyId } : x)),
+                                                      }));
+                                                    }}
+                                                  />
+                                                  <span className="flex min-w-0 flex-col">
+                                                    <span className="truncate">{e.name || "(unnamed)"}</span>
+                                                    {e.policyId && e.policyId !== policy.id ? (
+                                                      <span className="truncate text-[#9a8a7b]">
+                                                        (now: {budget.policies.find((p) => p.id === e.policyId)?.name ?? "?"})
+                                                      </span>
+                                                    ) : null}
+                                                  </span>
+                                                </label>
+                                              </li>
+                                            ) : (
+                                              <li key={e.id} className="truncate" title={e.name || "(unnamed)"}>
+                                                {e.name || "(unnamed)"}
+                                              </li>
+                                            ),
+                                          )}
+                                        </ul>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : null}
                               </div>
-                            ) : (
-                              <p className="mt-2 text-xs text-[#5b5148]">Not used by any expense.</p>
                             );
                           })()}
                           <div className="mt-3 flex flex-col gap-3">
@@ -1705,219 +1935,6 @@ function HomeContent() {
                         </div>
                       );
                     })}
-                  </div>
-                </>
-              )}
-            </section>
-
-            {/* Expenses */}
-            <section className={card}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <button
-                  type="button"
-                  className={`${sectionTitle} flex items-center gap-2`}
-                  onClick={() => setCollapsedExpenses((value) => !value)}
-                >
-                  <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedExpenses ? "▸" : "▾"}</span>
-                  Expenses
-                  <span className="text-sm font-normal text-[#9a8a7b]">({budget.expenses.length})</span>
-                </button>
-                {!collapsedExpenses && expenseCategories.length > 0 ? (
-                  <button type="button" className={pillButton} onClick={toggleAllCategories}>
-                    {allCategoriesCollapsed ? "Expand all" : "Collapse all"}
-                  </button>
-                ) : null}
-              </div>
-              {collapsedExpenses ? null : (
-                <>
-                  <p className={`${sectionHint} mt-1`}>
-                    Grouped by category. Each line item is a per-year cost and a policy that decides how it is split. Drag the ☰ handle to
-                    reorder categories, or sort the line items within a category by name, amount, or split.
-                  </p>
-                  <div className="mt-4 flex flex-col gap-5">
-                    {expenseCategories.map((category) => {
-                      const sort = expenseSort[category];
-                      const items = applyOrder(
-                        budget.expenses.filter((expense) => expense.category === category),
-                        expenseOrder[category] ?? [],
-                        (expense) => expense.id,
-                      );
-                      const catCollapsed = collapsedTypes.has(catKey(category));
-                      const categoryTotal = items.reduce((sum, e) => sum + e.amount, 0);
-                      return (
-                        // biome-ignore lint/a11y/noStaticElementInteractions: native drag-and-drop reorder target
-                        <div
-                          key={category}
-                          data-cat={category}
-                          className={`flex flex-col gap-2 transition-opacity ${dragCategory === category ? "opacity-40" : ""}`}
-                          onDragOver={(event) => {
-                            if (dragCategory) {
-                              event.preventDefault();
-                              if (dragCategory !== category) {
-                                moveCategory(dragCategory, category, isAfterMidpoint(event));
-                              }
-                            }
-                          }}
-                          onDrop={(event) => {
-                            event.preventDefault();
-                            setDragCategory(null);
-                          }}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              {/* biome-ignore lint/a11y/noStaticElementInteractions: drag handle */}
-                              <span
-                                draggable
-                                onDragStart={(event) => {
-                                  setDragCategory(category);
-                                  const group = (event.currentTarget as HTMLElement).closest("[data-cat]");
-                                  if (group) {
-                                    event.dataTransfer.setDragImage(group, 20, 16);
-                                  }
-                                }}
-                                onDragEnd={() => setDragCategory(null)}
-                                className="cursor-grab select-none text-[#b3a392]"
-                                title={`Drag to reorder category ${category}`}
-                              >
-                                ☰
-                              </span>
-                              <button
-                                type="button"
-                                className="flex items-center"
-                                aria-label={catCollapsed ? `Expand ${category}` : `Collapse ${category}`}
-                                onClick={() => toggleType(catKey(category))}
-                              >
-                                <span className="text-lg leading-none text-[#8c7b6c]">{catCollapsed ? "▸" : "▾"}</span>
-                              </button>
-                              <CategoryName category={category} onRename={renameCategory} />
-                              {catCollapsed && items.length > 0 ? (
-                                <span className="text-xs text-[#9a8a7b]">
-                                  {items.length} item{items.length !== 1 ? "s" : ""} &middot; {formatCurrency(categoryTotal)}/yr
-                                </span>
-                              ) : null}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {!catCollapsed && items.length > 1 ? <span className={groupHeading}>Sort by</span> : null}
-                              {!catCollapsed && items.length > 1 ? (
-                                <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
-                                  {(["name", "amount", "split"] as ExpenseSortKey[]).map((key) => {
-                                    const active = sort?.key === key;
-                                    return (
-                                      <button
-                                        key={key}
-                                        type="button"
-                                        className={`px-2.5 py-1 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
-                                        aria-label={`Sort ${category} by ${EXPENSE_SORT_LABELS[key].toLowerCase()}${active ? ` (${sort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
-                                        onClick={() => cycleExpenseSort(category, key)}
-                                      >
-                                        {EXPENSE_SORT_LABELS[key]}
-                                        {active ? (sort.dir === "asc" ? " ↑" : " ↓") : ""}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              ) : null}
-                              <button
-                                type="button"
-                                className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                                aria-label={`Remove category ${category}`}
-                                onClick={() =>
-                                  patch((draft) => ({
-                                    ...draft,
-                                    categories: draft.categories.filter((item) => item !== category),
-                                    expenses: draft.expenses.filter((expense) => expense.category !== category),
-                                  }))
-                                }
-                              >
-                                <TrashIcon />
-                              </button>
-                            </div>
-                          </div>
-                          {!catCollapsed &&
-                            !dragCategory &&
-                            items.map((expense, expenseIndex) => (
-                              <div
-                                key={expense.id}
-                                className="grid gap-2 transition-opacity sm:grid-cols-[1.4fr_1fr_1.6fr_auto] sm:items-center"
-                              >
-                                <TextField
-                                  id={`expense-name-${expense.id}`}
-                                  className={field}
-                                  value={expense.name}
-                                  placeholder="New expense"
-                                  onChange={(next) =>
-                                    patch((draft) => ({
-                                      ...draft,
-                                      expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, name: next } : e)),
-                                    }))
-                                  }
-                                />
-                                <CurrencyField
-                                  className={field}
-                                  value={expense.amount}
-                                  onChange={(next) =>
-                                    patch((draft) => ({
-                                      ...draft,
-                                      expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, amount: next } : e)),
-                                    }))
-                                  }
-                                />
-                                <select
-                                  className={field}
-                                  value={expense.policyId}
-                                  onChange={(event) =>
-                                    patch((draft) => ({
-                                      ...draft,
-                                      expenses: draft.expenses.map((e) =>
-                                        e.id === expense.id ? { ...e, policyId: event.target.value } : e,
-                                      ),
-                                    }))
-                                  }
-                                  onKeyDown={(event) => {
-                                    if (event.key === "Tab" && !event.shiftKey && expenseIndex === items.length - 1) {
-                                      event.preventDefault();
-                                      addExpenseAndFocus(category);
-                                    }
-                                  }}
-                                >
-                                  {budget.policies.map((policy) => (
-                                    <option key={policy.id} value={policy.id}>
-                                      {policy.name}
-                                    </option>
-                                  ))}
-                                </select>
-                                <button
-                                  type="button"
-                                  className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                                  aria-label="Remove expense"
-                                  onClick={() =>
-                                    patch((draft) => ({ ...draft, expenses: draft.expenses.filter((e) => e.id !== expense.id) }))
-                                  }
-                                >
-                                  <TrashIcon />
-                                </button>
-                              </div>
-                            ))}
-                          {!catCollapsed && !dragCategory && (
-                            <button type="button" className={`${pillButton} self-start`} onClick={() => addExpenseAndFocus(category)}>
-                              Add expense
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                    <InlineAdd
-                      placeholder="Add category"
-                      onAdd={(value) =>
-                        patch((draft) =>
-                          draft.categories.includes(value) ? draft : { ...draft, categories: [...draft.categories, value] },
-                        )
-                      }
-                    />
-                    <div className="mt-2 flex items-center justify-between border-t border-[#eadccb] pt-3 text-sm font-semibold text-[#181716]">
-                      <span>Total expenses</span>
-                      <span>{formatCurrency(budget.expenses.reduce((sum, expense) => sum + expense.amount, 0))}/yr</span>
-                    </div>
                   </div>
                 </>
               )}
@@ -2464,7 +2481,18 @@ function NumberField({
 }
 
 // Currency input with a $ prefix: ignores a typed $, shows 2 decimals when idle, raw value while editing.
-function CurrencyField({ value, onChange, className }: { value: number; onChange: (next: number) => void; className: string }) {
+function CurrencyField({
+  value,
+  onChange,
+  className,
+  onTabOut,
+}: {
+  value: number;
+  onChange: (next: number) => void;
+  className: string;
+  // Called instead of moving focus when Tab (without Shift) is pressed.
+  onTabOut?: (() => void) | undefined;
+}) {
   const [draft, setDraft] = useState<string | null>(null);
   const commit = () => {
     if (draft !== null) {
@@ -2490,6 +2518,10 @@ function CurrencyField({ value, onChange, className }: { value: number; onChange
           if (event.key === "Enter") {
             event.preventDefault();
             event.currentTarget.blur();
+          } else if (event.key === "Tab" && !event.shiftKey && onTabOut) {
+            event.preventDefault();
+            event.currentTarget.blur();
+            onTabOut();
           }
         }}
       />
