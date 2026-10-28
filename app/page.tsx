@@ -1999,7 +1999,7 @@ function HomeContent() {
                   <span className="font-semibold text-[#b44b43]">{formatCurrency(result.unallocated)} unallocated.</span>
                 ) : null}
               </p>
-              <div className="mt-4 flex flex-col gap-4">
+              <div className={`mt-4 grid items-start gap-4 ${showBreakdown ? "" : "md:grid-cols-2 lg:grid-cols-3"}`}>
                 {sortedPerOwner.map((owner) => {
                   const chargesCollapsed = collapsedCharges.has(owner.ownerId);
                   return (
@@ -2007,7 +2007,7 @@ function HomeContent() {
                       <div className="flex items-center justify-between gap-3">
                         <button
                           type="button"
-                          className="flex items-center gap-2"
+                          className="flex items-center gap-2 text-left"
                           onClick={() =>
                             setCollapsedCharges((prev) => {
                               const next = new Set(prev);
@@ -2026,7 +2026,7 @@ function HomeContent() {
                             {owner.isBoard ? <span className="ml-2 text-xs italic">board</span> : null}
                           </span>
                         </button>
-                        <span className={`font-semibold ${owner.isBoard ? "text-[#a89a8b]" : "text-[#181716]"}`}>
+                        <span className={`whitespace-nowrap font-semibold ${owner.isBoard ? "text-[#a89a8b]" : "text-[#181716]"}`}>
                           {formatCurrency(owner.monthly)}/mo
                         </span>
                       </div>
@@ -2037,11 +2037,13 @@ function HomeContent() {
                             : (() => {
                                 const delta = owner.monthly - owner.currentMonthly;
                                 const up = delta >= 0;
-                                const color = Math.abs(delta) < 0.01 ? "text-[#5b5148]" : up ? "text-[#b44b43]" : "text-[#3f7a52]";
+                                const color = Math.abs(delta) < 0.01 ? "text-[#5b5148]" : up ? "text-[#5f5852]" : "text-[#3f7a52]";
                                 return (
                                   <div className="mt-1 text-sm text-[#5b5148]">
-                                    current {formatCurrency(owner.currentMonthly)}/mo &rarr; new {formatCurrency(owner.monthly)}/mo{" "}
-                                    <span className={`font-semibold ${color}`}>
+                                    current <span className="whitespace-nowrap">{formatCurrency(owner.currentMonthly)}/mo</span> &rarr;{" "}
+                                    <span className="whitespace-nowrap">new {formatCurrency(owner.monthly)}/mo</span>
+                                    <br />
+                                    <span className={`whitespace-nowrap font-semibold ${color}`}>
                                       ({up ? "+" : "-"}
                                       {formatCurrency(Math.abs(delta))}/mo
                                       {owner.currentMonthly > 0
