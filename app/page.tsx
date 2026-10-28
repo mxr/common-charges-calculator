@@ -187,6 +187,18 @@ function HomeContent() {
     window.setTimeout(() => document.getElementById(`unittype-name-${index}`)?.focus(), 0);
   };
 
+  // "Add unit" first asks for a unit type; picking one adds the unit and focuses its label.
+  const [addingUnit, setAddingUnit] = useState(false);
+  const addUnitAndFocus = (type: string) => {
+    const id = makeId("unit");
+    patch((draft) => ({
+      ...draft,
+      units: [...draft.units, { id, label: "New unit", type, commonInterest: 0, ownerId: draft.owners[0]?.id ?? "", tags: [] }],
+    }));
+    setAddingUnit(false);
+    window.setTimeout(() => document.getElementById(`unit-label-${id}`)?.focus(), 0);
+  };
+
   const handleUnitTypeTab = (event: React.KeyboardEvent<HTMLInputElement>, isLast: boolean) => {
     if (event.key !== "Tab" || event.shiftKey || !isLast) {
       return;
@@ -495,6 +507,7 @@ function HomeContent() {
     return (
       <div key={unit.id} className="grid gap-2 transition-opacity sm:grid-cols-[1.2fr_1.2fr_0.9fr_1.4fr_auto] sm:items-center">
         <TextField
+          id={`unit-label-${unit.id}`}
           className={field}
           value={unit.label}
           onChange={(next) =>
@@ -989,28 +1002,45 @@ function HomeContent() {
                   <span className="text-sm font-normal text-[#9a8a7b]">({budget.units.length})</span>
                 </button>
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    className={pillButton}
-                    onClick={() =>
-                      patch((draft) => ({
-                        ...draft,
-                        units: [
-                          ...draft.units,
-                          {
-                            id: makeId("unit"),
-                            label: "New unit",
-                            type: draft.unitTypes[0]?.name ?? "",
-                            commonInterest: 0,
-                            ownerId: draft.owners[0]?.id ?? "",
-                            tags: [],
-                          },
-                        ],
-                      }))
-                    }
-                  >
-                    Add unit
-                  </button>
+                  {addingUnit ? (
+                    <>
+                      <select
+                        // biome-ignore lint/a11y/noAutofocus: opened by the user clicking "Add unit"
+                        autoFocus
+                        className={`${fieldBase} w-48`}
+                        aria-label="Type of new unit"
+                        value=""
+                        onChange={(event) => addUnitAndFocus(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") {
+                            setAddingUnit(false);
+                          }
+                        }}
+                      >
+                        <option value="" disabled>
+                          Pick a unit type…
+                        </option>
+                        {budget.unitTypes.map((type) => (
+                          <option key={type.name} value={type.name}>
+                            {type.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button type="button" className={pillButton} onClick={() => setAddingUnit(false)}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className={pillButton}
+                      disabled={budget.unitTypes.length === 0}
+                      title={budget.unitTypes.length === 0 ? "Add a unit type first" : undefined}
+                      onClick={() => setAddingUnit(true)}
+                    >
+                      Add unit
+                    </button>
+                  )}
                   <button type="button" className={pillButton} onClick={() => setBatch("unit")}>
                     Batch add
                   </button>
