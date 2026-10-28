@@ -1494,7 +1494,7 @@ function HomeContent() {
                                 <div className="mt-1 grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-x-4 gap-y-2">
                                   {groupByCategory(used).map((group) => (
                                     <div key={group.category} className="min-w-0">
-                                      <p className={breakdownSubheading}>{group.category || "—"}</p>
+                                      <p className="pb-0.5 font-semibold text-[#1d1b18]">{group.category || "—"}</p>
                                       <ul className="flex flex-col gap-0.5">
                                         {group.items.map((e) => (
                                           <li key={e.id} className="truncate" title={e.name || "(unnamed)"}>
