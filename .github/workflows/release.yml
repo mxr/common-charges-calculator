@@ -35,7 +35,7 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       # renovate: datasource=npm depName=vercel
-      VERCEL_VERSION: 64.7.0
+      VERCEL_VERSION: 65.8.0
     steps:
     - name: Checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
