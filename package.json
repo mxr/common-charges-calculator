@@ -1,17 +1,24 @@
 {
   "dependencies": {
+    "@neon/auth": "^0.8.2",
+    "@neondatabase/serverless": "^1.2.0",
+    "drizzle-orm": "^0.45.4",
     "lz-string": "^1.5.0",
     "next": "^16.2.12",
+    "nodemailer": "^10.3.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.14",
     "@tailwindcss/postcss": "^4",
     "@tsconfig/strictest": "^2.0.8",
     "@types/node": "^24",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^5.0.0",
+    "drizzle-kit": "^0.31.11",
     "tailwindcss": "^4",
     "typescript": "^7",
     "vitest": "^5.0.0"
@@ -23,11 +30,14 @@
   "private": true,
   "scripts": {
     "build": "next build --turbopack",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
     "dev": "next dev --turbopack",
     "start": "next start",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "vercel-build": "{ [ \"$VERCEL_ENV\" != preview ] || npm run db:migrate; } && npm run build"
   },
   "version": "0.7.4"
 }
