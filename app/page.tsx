@@ -2175,6 +2175,19 @@ function HomeContent() {
                         </button>
                         <span className={`whitespace-nowrap font-semibold ${owner.isBoard ? "text-[#a89a8b]" : "text-[#181716]"}`}>
                           {formatCurrency(owner.monthly)}/mo
+                          {chargesCollapsed && !owner.isBoard
+                            ? (() => {
+                                const delta = owner.monthly - owner.currentMonthly;
+                                const up = delta >= 0;
+                                const color = Math.abs(delta) < 0.01 ? "text-[#5b5148]" : up ? "text-[#5f5852]" : "text-[#3f7a52]";
+                                return (
+                                  <span className={`ml-2 text-sm ${color}`}>
+                                    ({up ? "+" : "-"}
+                                    {formatCurrency(Math.abs(delta))})
+                                  </span>
+                                );
+                              })()
+                            : null}
                         </span>
                       </div>
                       {chargesCollapsed ? null : (
