@@ -4,7 +4,9 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: "*",
-      allow: "/",
+      // "$" ends the match, so "/?b=..." budget URLs stay unindexed.
+      allow: ["/$", "/_next/static/", "/icon.svg"],
+      disallow: "/",
     },
   };
 }
