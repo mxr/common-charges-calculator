@@ -16,17 +16,22 @@ type PackedUnitType = [string, 0 | 1];
 // Tags trail the unit and rule tuples so budgets shared before tags existed still decode (as no tags).
 type PackedUnit = [string, Ref, number, number, string[]?];
 type PackedRule = [Ref[], number, number, string[]?];
-type PackedPolicy = [string, PackedRule[]];
+// The note trails so budgets shared before policy notes existed still decode (as no note).
+type PackedPolicy = [string, PackedRule[], string?];
 type PackedExpense = [string, Ref, number, number];
-type PackedAdjustments = [number, number, Array<[Ref, number]>, number];
+// Incomes are [name, amount] pairs. A bare number is also accepted on read for budgets shared
+// before named incomes existed, and becomes a single "Other income" line.
+type PackedIncome = [string, number];
+type PackedAdjustments = [number, number, Array<[Ref, number]>, PackedIncome[] | number];
 type Packed = [PackedUnitType[], string[], PackedOwner[], PackedUnit[], PackedPolicy[], PackedExpense[], PackedAdjustments];
 
 const pack = (budget: Budget): Packed => {
-  // $0 expenses, empty policies, and 0% offsets have no effect on charges, so they are left out of the URL.
+  // $0 expenses and incomes, empty policies, and 0% offsets have no effect on charges, so they are left out of the URL.
   // Expenses that pointed at a dropped policy decode as having no policy.
   const policies = budget.policies.filter((policy) => !isEmptyPolicy(policy));
   const expenses = budget.expenses.filter((expense) => expense.amount !== 0);
   const offsets = (budget.adjustments.offsets ?? []).filter((offset) => offset.pct !== 0);
+  const incomes = (budget.adjustments.incomes ?? []).filter((income) => income.amount !== 0);
   const ownerIndex = new Map(budget.owners.map((owner, i) => [owner.id, i]));
   const policyIndex = new Map(policies.map((policy, i) => [policy.id, i]));
   const typeIndex = new Map(budget.unitTypes.map((type, i) => [type.name, i]));
@@ -49,6 +54,7 @@ const pack = (budget: Budget): Packed => {
           policy.rules.map(
             (rule) => [rule.unitTypes.map(typeRef), rule.weight, ALLOCATION_METHODS.indexOf(rule.method), rule.tags] as PackedRule,
           ),
+          policy.note ?? "",
         ] as PackedPolicy,
     ),
     expenses.map(
@@ -64,7 +70,7 @@ const pack = (budget: Budget): Packed => {
       adjustments.inflationPct,
       adjustments.reservePct,
       offsets.map((offset) => [typeRef(offset.unitType), offset.pct] as [Ref, number]),
-      adjustments.incomeOffset ?? 0,
+      incomes.map((income) => [income.name, income.amount] as PackedIncome),
     ],
   ];
 };
@@ -85,6 +91,10 @@ const unpack = (packed: Packed): Budget => {
   // produce different ids each run, causing a React hydration mismatch.
   const ownerIds = owners.map((_, i) => `owner-${i}`);
   const policyIds = policies.map((_, i) => `policy-${i}`);
+  const packedIncomes = adjustments[3];
+  const incomes = (typeof packedIncomes === "number" ? [["Other income", packedIncomes] as PackedIncome] : packedIncomes).filter(
+    ([, amount]) => amount !== 0,
+  );
 
   return normalizeBudget({
     unitTypes: unitTypeList,
@@ -98,7 +108,7 @@ const unpack = (packed: Packed): Budget => {
       ownerId: ownerRef >= 0 ? (ownerIds[ownerRef] ?? "") : "",
       tags,
     })),
-    policies: policies.map(([name, rules], i) => ({
+    policies: policies.map(([name, rules, note], i) => ({
       id: policyIds[i],
       name,
       rules: rules.map(([ruleTypes, weight, methodIdx, tags]) => ({
@@ -107,6 +117,7 @@ const unpack = (packed: Packed): Budget => {
         weight,
         method: ALLOCATION_METHODS[methodIdx] ?? ALLOCATION_METHODS[0],
       })),
+      note,
     })),
     expenses: expenses.map(([name, category, amount, policyRef], i) => ({
       id: `exp-${i}`,
@@ -119,7 +130,7 @@ const unpack = (packed: Packed): Budget => {
       inflationPct: adjustments[0],
       reservePct: adjustments[1],
       offsets: adjustments[2].map(([unitType, pct]) => ({ unitType: resolveType(unitType), pct })),
-      incomeOffset: adjustments[3],
+      incomes: incomes.map(([name, amount], i) => ({ id: `income-${i}`, name, amount })),
     },
   });
 };
