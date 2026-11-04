@@ -1,6 +1,6 @@
 # Backend plan
 
-Status: in progress. Milestone 1 works on the preview and is not released.
+Status: in progress. Milestone 1 shipped in v0.8.0. Milestone 2 is in review.
 
 ## Goal
 
@@ -264,16 +264,16 @@ leaves your machine".
 
 ## Changes to existing code
 
-`HomeContent` in `app/page.tsx` owns the budget state and writes it to `?b=`. Split it into a `Calculator` component
-that takes `initialBudget`, `readOnly`, and `onBudgetChange`.
+`Calculator` in `app/_components/calculator.tsx` owns the budget state. It takes `initialBudget` and calls
+`onBudgetChange` with each new budget, including the first. Milestone 4 adds `readOnly`, when the version page needs it.
 
 - `/` passes the budget from `parseBudgetUrl` and keeps the `syncUrlState` behavior.
 - The draft editor passes the draft content and saves through `onBudgetChange`.
-- The version page sets `readOnly`.
+- The version page will set `readOnly`.
 - The `c` and `s` params keep working on every route. Only `/` writes `b`.
 
-This split is the riskiest frontend step, because `app/page.tsx` has 2,829 lines. It ships by itself, with no change in
-behavior.
+Two components write to the URL, so `replaceSearchParams` reads the current URL on each call. A copy from
+`useSearchParams` taken during one render would make the second write undo the first.
 
 These text changes ship with accounts:
 
@@ -318,7 +318,8 @@ Each milestone can ship alone.
    `/buildings` page with a log out button. Login does not go live without the gate.
 2. **Calculator split.** Extract `Calculator`. No behavior change.
 3. **Buildings and drafts.** Create buildings, projects, and budgets. Add "Save to account" and autosaved drafts.
-4. **Versions.** Publish, read-only versions, restore, and the changelog with `diffBudgets`.
+4. **Versions.** Publish, read-only versions with a `readOnly` prop on `Calculator`, restore, and the changelog with
+   `diffBudgets`.
 5. **Sharing.** Roles, invite links, and permission checks for members.
 
 Until milestone 5 ships, only the building admin can reach a budget.
