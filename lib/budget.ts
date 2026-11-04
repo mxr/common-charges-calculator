@@ -4,6 +4,7 @@ import type {
   AllocationMethod,
   Budget,
   Expense,
+  Income,
   Owner,
   Policy,
   PolicyRule,
@@ -60,6 +61,7 @@ export const DEFAULT_BUDGET: Budget = {
     {
       id: "policy-standard",
       name: "Standard (by common interest)",
+      note: "",
       rules: [
         { unitTypes: ["Residential", "Commercial", "Storage", "Garage", "Cabana"], tags: [], weight: 100, method: "common_interest" },
       ],
@@ -67,16 +69,19 @@ export const DEFAULT_BUDGET: Budget = {
     {
       id: "policy-no-commercial",
       name: "Exclude commercial",
+      note: "",
       rules: [{ unitTypes: ["Residential", "Storage", "Garage", "Cabana"], tags: [], weight: 100, method: "common_interest" }],
     },
     {
       id: "policy-per-residential",
       name: "Equal per residential unit",
+      note: "",
       rules: [{ unitTypes: ["Residential"], tags: [], weight: 100, method: "equal_per_unit" }],
     },
     {
       id: "policy-super",
       name: "5% commercial / 95% rest",
+      note: "",
       rules: [
         { unitTypes: ["Commercial"], tags: [], weight: 5, method: "common_interest" },
         { unitTypes: ["Residential", "Storage", "Garage", "Cabana"], tags: [], weight: 95, method: "common_interest" },
@@ -85,11 +90,13 @@ export const DEFAULT_BUDGET: Budget = {
     {
       id: "policy-parking",
       name: "Garage & storage only",
+      note: "",
       rules: [{ unitTypes: ["Garage", "Storage"], tags: [], weight: 100, method: "equal_per_unit" }],
     },
     {
       id: "policy-hydronic",
       name: "Hydronic units only",
+      note: "",
       rules: [{ unitTypes: ["Residential"], tags: ["hydronic"], weight: 100, method: "common_interest" }],
     },
   ],
@@ -112,7 +119,7 @@ export const DEFAULT_BUDGET: Budget = {
     { id: "exp-mgmt", name: "Property management", category: "Services", amount: 2700, policyId: "policy-standard" },
     { id: "exp-snow", name: "Snow removal", category: "Services", amount: 2700, policyId: "policy-parking" },
   ],
-  adjustments: { inflationPct: 0, reservePct: 10, offsets: [], incomeOffset: 0 },
+  adjustments: { inflationPct: 0, reservePct: 10, offsets: [], incomes: [] },
 };
 
 const asString = (value: unknown, fallback = "") => (typeof value === "string" ? value : fallback);
@@ -170,6 +177,7 @@ const normalizePolicy = (value: unknown, index: number): Policy => {
     id: asString(raw.id) || makeId("policy"),
     name: asString(raw.name) || `Policy ${index + 1}`,
     rules: rules.length > 0 ? rules : [{ unitTypes: [], tags: [], weight: 100, method: "common_interest" }],
+    note: asString(raw.note),
   };
 };
 
@@ -207,6 +215,27 @@ const normalizeExpense = (value: unknown, index: number): Expense => {
   };
 };
 
+const normalizeIncome = (value: unknown, index: number): Income => {
+  const raw = (value ?? {}) as Partial<Record<keyof Income, unknown>>;
+  return {
+    id: asString(raw.id) || makeId("income"),
+    name: asString(raw.name) || `Income ${index + 1}`,
+    amount: asNumber(raw.amount),
+  };
+};
+
+// Budgets saved before named incomes existed stored a single flat `incomeOffset`.
+const normalizeIncomes = (raw: Record<string, unknown>): Income[] => {
+  if (Array.isArray(raw["incomes"])) {
+    return raw["incomes"].map(normalizeIncome);
+  }
+  const legacy = asNumber(raw["incomeOffset"]);
+  return legacy !== 0 ? [{ id: makeId("income"), name: "Other income", amount: legacy }] : [];
+};
+
+// Sum of every non-common-charge income line.
+export const sumIncomes = (adjustments: Adjustments): number => (adjustments.incomes ?? []).reduce((sum, income) => sum + income.amount, 0);
+
 const normalizeOffset = (value: unknown): TypeOffset => {
   const raw = (value ?? {}) as Partial<Record<keyof TypeOffset, unknown>>;
   return { unitType: asString(raw.unitType), pct: asNumber(raw.pct) };
@@ -218,7 +247,7 @@ const normalizeAdjustments = (value: unknown): Adjustments => {
     inflationPct: asNumber(raw.inflationPct),
     reservePct: asNumber(raw.reservePct),
     offsets: Array.isArray(raw.offsets) ? raw.offsets.map(normalizeOffset) : [],
-    incomeOffset: asNumber(raw.incomeOffset),
+    incomes: normalizeIncomes(raw as Record<string, unknown>),
   };
 };
 

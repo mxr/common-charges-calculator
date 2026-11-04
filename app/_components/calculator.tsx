@@ -99,7 +99,8 @@ export function Calculator({ initialBudget, onBudgetChange }: { initialBudget: B
   const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<"setup" | "rules">("setup");
+  // The `t` param is 1 when the Calculator tab is open; it is omitted for the default Owners & units tab.
+  const [activeTab, setActiveTab] = useState<"setup" | "rules">(searchParams.get("t") === "1" ? "rules" : "setup");
   const [assignmentView, setAssignmentView] = useState<"type" | "owner">("type");
   const [unitFilter, setUnitFilter] = useState<UnitFilter>("all");
   const [unitTypeFilter, setUnitTypeFilter] = useState<Set<string>>(new Set());
@@ -406,12 +407,13 @@ export function Calculator({ initialBudget, onBudgetChange }: { initialBudget: B
   };
 
   const sortParam = serializeSortParam(ownerSort, unitSort, unitTypeSort, expenseSort);
+  const tabParam = activeTab === "rules" ? "1" : "";
   useEffect(() => onBudgetChange(budget), [budget, onBudgetChange]);
   useEffect(
     function syncUrlState() {
-      replaceSearchParams({ c: collapsedParam, s: sortParam });
+      replaceSearchParams({ c: collapsedParam, s: sortParam, t: tabParam });
     },
-    [collapsedParam, sortParam],
+    [collapsedParam, sortParam, tabParam],
   );
 
   const toggleType = (key: string) =>
@@ -1629,6 +1631,7 @@ export function Calculator({ initialBudget, onBudgetChange }: { initialBudget: B
                           {
                             id: makeId("policy"),
                             name: "New policy",
+                            note: "",
                             rules: [{ unitTypes: [], tags: [], weight: 100, method: "common_interest" }],
                           },
                           ...draft.policies,
@@ -1715,6 +1718,17 @@ export function Calculator({ initialBudget, onBudgetChange }: { initialBudget: B
                               </button>
                             </div>
                           </div>
+                          <TextField
+                            className={`${field} mt-2`}
+                            value={policy.note ?? ""}
+                            placeholder="Note (optional)"
+                            onChange={(next) =>
+                              patch((draft) => ({
+                                ...draft,
+                                policies: draft.policies.map((p) => (p.id === policy.id ? { ...p, note: next } : p)),
+                              }))
+                            }
+                          />
                           {(() => {
                             const used = budget.expenses.filter((e) => e.policyId === policy.id);
                             const editing = editingPolicyExpenses === policy.id;
@@ -2003,15 +2017,77 @@ export function Calculator({ initialBudget, onBudgetChange }: { initialBudget: B
                     onChange={(next) => patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, reservePct: next } }))}
                   />
                 </span>
-                <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
-                  Other income $/yr
-                  <CurrencyField
-                    className={`${fieldBase} w-36`}
-                    value={budget.adjustments.incomeOffset ?? 0}
-                    onChange={(next) => patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, incomeOffset: next } }))}
-                  />
-                </span>
               </div>
+
+              <div className="mt-5 flex items-center justify-between gap-3">
+                <span className={groupHeading}>Other income</span>
+                <button
+                  type="button"
+                  className={pillButton}
+                  onClick={() =>
+                    patch((draft) => ({
+                      ...draft,
+                      adjustments: {
+                        ...draft.adjustments,
+                        incomes: [...(draft.adjustments.incomes ?? []), { id: makeId("income"), name: "", amount: 0 }],
+                      },
+                    }))
+                  }
+                >
+                  Add income
+                </button>
+              </div>
+              {(budget.adjustments.incomes ?? []).length > 0 ? (
+                <div className="mt-2 grid gap-x-6 gap-y-2 lg:grid-cols-2">
+                  {(budget.adjustments.incomes ?? []).map((income) => (
+                    <div key={income.id} className="grid grid-cols-[1fr_9rem_auto] items-center gap-2">
+                      <TextField
+                        className={field}
+                        value={income.name}
+                        placeholder="New income"
+                        onChange={(next) =>
+                          patch((draft) => ({
+                            ...draft,
+                            adjustments: {
+                              ...draft.adjustments,
+                              incomes: (draft.adjustments.incomes ?? []).map((x) => (x.id === income.id ? { ...x, name: next } : x)),
+                            },
+                          }))
+                        }
+                      />
+                      <CurrencyField
+                        className={field}
+                        value={income.amount}
+                        onChange={(next) =>
+                          patch((draft) => ({
+                            ...draft,
+                            adjustments: {
+                              ...draft.adjustments,
+                              incomes: (draft.adjustments.incomes ?? []).map((x) => (x.id === income.id ? { ...x, amount: next } : x)),
+                            },
+                          }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                        aria-label="Remove income"
+                        onClick={() =>
+                          patch((draft) => ({
+                            ...draft,
+                            adjustments: {
+                              ...draft.adjustments,
+                              incomes: (draft.adjustments.incomes ?? []).filter((x) => x.id !== income.id),
+                            },
+                          }))
+                        }
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
 
               <div className="mt-5 flex items-center justify-between gap-3">
                 <span className={groupHeading}>Unit-type offsets</span>

@@ -22,6 +22,8 @@ export type Policy = {
   id: string;
   name: string;
   rules: PolicyRule[];
+  // Freeform explanation of why the policy splits the way it does. Display only.
+  note?: string;
 };
 
 // At most one owner is the board. Board-owned units pay nothing; their share of each
@@ -69,6 +71,12 @@ export type Expense = {
   policyId: string;
 };
 
+export type Income = {
+  id: string;
+  name: string;
+  amount: number;
+};
+
 // A percentage adjustment applied to every unit of a given type (e.g. -5% to Commercial).
 export type TypeOffset = {
   unitType: string;
@@ -82,9 +90,9 @@ export type Adjustments = {
   reservePct: number;
   // Per-unit-type percentage offsets applied to each affected unit's charge.
   offsets?: TypeOffset[];
-  // Flat annual income from non-common-charge sources; reduces the total owners must cover,
-  // spread across units proportional to their base charge.
-  incomeOffset?: number;
+  // Annual income from non-common-charge sources (e.g. laundry); their sum reduces the total owners
+  // must cover, spread across units proportional to their base charge.
+  incomes?: Income[];
 };
 
 export type Budget = {

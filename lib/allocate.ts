@@ -1,3 +1,4 @@
+import { sumIncomes } from "./budget";
 import type { Budget, PolicyRule, Unit } from "./types";
 
 export type UnitCharge = {
@@ -172,7 +173,7 @@ export const computeCharges = (budget: Budget): ChargeResult => {
 
   // Non-common-charge income reduces the total to collect, spread proportional to each unit's base.
   const basePool = charges.reduce((sum, charge) => sum + charge.base, 0);
-  const incomeFactor = basePool > 0 ? (budget.adjustments.incomeOffset ?? 0) / basePool : 0;
+  const incomeFactor = basePool > 0 ? sumIncomes(budget.adjustments) / basePool : 0;
 
   const byCategory: Record<string, number> = {};
   const ownerTotals = new Map<string, number>();
@@ -233,7 +234,7 @@ export type Reconciliation = {
 export const reconcileCharges = (budget: Budget, result: ChargeResult): Reconciliation => {
   const inflationFactor = 1 + budget.adjustments.inflationPct / 100;
   const expenses = budget.expenses.reduce((sum, expense) => sum + expense.amount, 0) * inflationFactor;
-  const expected = (expenses - (budget.adjustments.incomeOffset ?? 0)) * (1 + budget.adjustments.reservePct / 100);
+  const expected = (expenses - sumIncomes(budget.adjustments)) * (1 + budget.adjustments.reservePct / 100);
   const collected = result.perUnit.reduce((sum, charge) => sum + charge.monthly * 12, 0);
   return { expected, collected, matches: Math.abs(expected - collected) < 0.01 };
 };
