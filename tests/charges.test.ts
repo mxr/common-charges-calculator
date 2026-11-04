@@ -275,10 +275,17 @@ describe("computeCharges adjustments", () => {
     expect(chargeFor(budget, "r2").total).toBeCloseTo(5);
   });
 
-  it("subtracts non-common-charge income proportional to base", () => {
+  it("subtracts the sum of non-common-charge incomes proportional to base", () => {
     const budget = makeBudget({
       units: [unit("u1", "residential", 50, "o1"), unit("u2", "commercial", 50, "o1")],
-      adjustments: { inflationPct: 0, reservePct: 0, incomeOffset: 20 },
+      adjustments: {
+        inflationPct: 0,
+        reservePct: 0,
+        incomes: [
+          { id: "i0", name: "Laundry", amount: 12 },
+          { id: "i1", name: "Roof lease", amount: 8 },
+        ],
+      },
     });
     const result = computeCharges(budget);
     expect(chargeFor(budget, "u1").total).toBeCloseTo(40);
@@ -355,7 +362,12 @@ describe("reconcileCharges", () => {
     const budget = makeBudget({
       owners: [owner("o1"), owner("board", true)],
       units: [unit("u1", "residential", 50, "o1"), unit("u2", "commercial", 30, "o1"), unit("u3", "residential", 20, "board")],
-      adjustments: { inflationPct: 10, reservePct: 5, incomeOffset: 20, offsets: [{ unitType: "commercial", pct: -10 }] },
+      adjustments: {
+        inflationPct: 10,
+        reservePct: 5,
+        incomes: [{ id: "i0", name: "Laundry", amount: 20 }],
+        offsets: [{ unitType: "commercial", pct: -10 }],
+      },
     });
     const check = reconcileCharges(budget, computeCharges(budget));
     expect(check.expected).toBeCloseTo((110 - 20) * 1.05);
@@ -453,7 +465,7 @@ describe("normalizeBudget", () => {
     expect(budget.units).toEqual([]);
     expect(budget.expenses).toEqual([]);
     expect(budget.policies).toEqual([]);
-    expect(budget.adjustments).toEqual({ inflationPct: 0, reservePct: 0, offsets: [], incomeOffset: 0 });
+    expect(budget.adjustments).toEqual({ inflationPct: 0, reservePct: 0, offsets: [], incomes: [] });
   });
 
   it("coerces malformed fields and fills defaults", () => {
@@ -478,6 +490,23 @@ describe("normalizeBudget", () => {
     ]);
     expect(budget.adjustments.inflationPct).toBe(3);
     expect(budget.adjustments.offsets).toEqual([{ unitType: "commercial", pct: -5 }]);
+  });
+
+  it.each([
+    { id: "legacy flat amount", adjustments: { incomeOffset: "75" }, expected: [{ name: "Other income", amount: 75 }] },
+    { id: "legacy zero amount", adjustments: { incomeOffset: 0 }, expected: [] },
+    {
+      id: "named incomes",
+      adjustments: { incomes: [{ amount: "30" }, null] },
+      expected: [
+        { name: "Income 1", amount: 30 },
+        { name: "Income 2", amount: 0 },
+      ],
+    },
+  ])("normalizes other income from $id", ({ adjustments, expected }) => {
+    const incomes = normalizeBudget({ adjustments }).adjustments.incomes ?? [];
+    expect(incomes.map(({ name, amount }) => ({ name, amount }))).toEqual(expected);
+    expect(incomes.every((income) => income.id.startsWith("income-"))).toBe(true);
   });
 
   it("trims, drops blank, and de-duplicates tags", () => {
@@ -563,7 +592,7 @@ describe("serialize round-trips", () => {
       [["1A", 9, 50, 9]],
       [["standard", [[[0], 100, 9]]]],
       [["exp", 9, 10, 9]],
-      [0, 0, [], 0],
+      [0, 0, [], 150],
     ];
     const parsed = parseBudgetUrl(compressToEncodedURIComponent(JSON.stringify(packed))) as Budget;
     expect(parsed.unitTypes).toEqual([
@@ -574,6 +603,8 @@ describe("serialize round-trips", () => {
     expect(parsed.policies[0]?.rules[0]?.tags).toEqual([]);
     expect(parsed.policies[0]?.rules[0]?.method).toBe("common_interest");
     expect(parsed.expenses[0]).toMatchObject({ category: "", policyId: "" });
+    expect(parsed.policies[0]?.note).toBe("");
+    expect(parsed.adjustments.incomes).toEqual([{ id: "income-0", name: "Other income", amount: 150 }]);
   });
 
   it("preserves unit and rule tags through the packed encoding", () => {
@@ -588,6 +619,21 @@ describe("serialize round-trips", () => {
     expect(parsed.policies[0]?.rules[0]?.tags).toEqual(["hydronic"]);
   });
 
+  it("preserves policy notes through the packed encoding", () => {
+    const budget = makeBudget({
+      policies: [
+        {
+          id: "p",
+          name: "standard",
+          note: "Per bylaws 4.2",
+          rules: [{ unitTypes: ["residential"], tags: [], weight: 100, method: "common_interest" }],
+        },
+      ],
+    });
+    const parsed = parseBudgetUrl(serializeBudgetUrl(budget)) as Budget;
+    expect(parsed.policies[0]?.note).toBe("Per bylaws 4.2");
+  });
+
   it("preserves orphan references and offsets through the packed encoding", () => {
     // commercial type, the "p2" policy and "ghost" owner are not in their lookup lists, so the
     // packed form stores them as string/-1 fallbacks rather than indices.
@@ -598,7 +644,15 @@ describe("serialize round-trips", () => {
       units: [unit("u1", "commercial", 100, "ghost")],
       policies: [{ id: "p", name: "standard", rules: [{ unitTypes: ["commercial"], tags: [], weight: 100, method: "common_interest" }] }],
       expenses: [{ id: "e", name: "exp", category: "misc", amount: 100, policyId: "p2" }],
-      adjustments: { inflationPct: 5, reservePct: 10, offsets: [{ unitType: "commercial", pct: -5 }], incomeOffset: 200 },
+      adjustments: {
+        inflationPct: 5,
+        reservePct: 10,
+        offsets: [{ unitType: "commercial", pct: -5 }],
+        incomes: [
+          { id: "i0", name: "Laundry", amount: 200 },
+          { id: "i1", name: "Unused", amount: 0 },
+        ],
+      },
     });
     const parsed = parseBudgetUrl(serializeBudgetUrl(budget)) as Budget;
     expect(parsed.units[0]?.type).toBe("commercial");
@@ -606,7 +660,7 @@ describe("serialize round-trips", () => {
     expect(parsed.expenses[0]?.category).toBe("misc");
     expect(parsed.expenses[0]?.policyId).toBe("");
     expect(parsed.adjustments.offsets).toEqual([{ unitType: "commercial", pct: -5 }]);
-    expect(parsed.adjustments.incomeOffset).toBe(200);
+    expect(parsed.adjustments.incomes).toEqual([{ id: "income-0", name: "Laundry", amount: 200 }]);
   });
 
   it("omits $0 expenses, empty policies, and 0% offsets from the packed encoding", () => {
@@ -625,7 +679,7 @@ describe("serialize round-trips", () => {
         { id: "paid", name: "paid", category: "general", amount: 100, policyId: "real" },
         { id: "orphaned", name: "orphaned", category: "general", amount: 50, policyId: "zero" },
       ],
-      adjustments: { inflationPct: 0, reservePct: 0, offsets: [{ unitType: "residential", pct: 0 }], incomeOffset: 0 },
+      adjustments: { inflationPct: 0, reservePct: 0, offsets: [{ unitType: "residential", pct: 0 }], incomes: [] },
     });
     const parsed = parseBudgetUrl(serializeBudgetUrl(budget)) as Budget;
     expect(parsed.policies.map((policy) => policy.name)).toEqual(["real"]);
