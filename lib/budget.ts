@@ -122,6 +122,16 @@ export const DEFAULT_BUDGET: Budget = {
   adjustments: { inflationPct: 0, reservePct: 10, offsets: [], incomes: [] },
 };
 
+export const EMPTY_BUDGET: Budget = {
+  owners: [],
+  units: [],
+  unitTypes: [...DEFAULT_UNIT_TYPES],
+  categories: [...DEFAULT_CATEGORIES],
+  policies: [],
+  expenses: [],
+  adjustments: { inflationPct: 0, reservePct: 0, offsets: [], incomes: [] },
+};
+
 const asString = (value: unknown, fallback = "") => (typeof value === "string" ? value : fallback);
 
 const asNumber = (value: unknown, fallback = 0) => {

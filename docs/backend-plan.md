@@ -1,6 +1,6 @@
 # Backend plan
 
-Status: in progress. Milestone 1 shipped in v0.8.0. Milestone 2 is in review.
+Status: in progress. Milestone 1 shipped in v0.8.0. Milestone 2 merged. Milestone 3 is in review.
 
 ## Goal
 
@@ -57,6 +57,8 @@ flowchart LR
   because each draft has one author.
 - Drizzle defines the schema and generates migrations. Server code connects with `DATABASE_URL`, the pooled connection.
 - Every Server Action calls `lib/server/access.ts` before it reads or writes. Pages do not check roles themselves.
+- `lib/server/access.ts` returns a grant, such as `BudgetAccess`, and the functions in `lib/server/store.ts` take a
+  grant instead of an id. A Server Action that skips the check does not compile.
 
 ## Login and bot protection
 
@@ -247,7 +249,10 @@ change affects each unit.
 | `/budgets/[budgetId]/versions/[number]` | Read-only version.                                          |
 | `/invites/[token]`                      | Accepts an invite after login.                              |
 
-"Save to account" keeps the current budget in the browser through login, then creates a new draft from it.
+"Save to account" keeps the current budget in the browser through login, then creates a new draft from it. The Neon
+middleware redirects to `/login` without a return URL, so the button stores the `b` param in `localStorage` and opens
+`/buildings`. The logged-in pages show a banner while a budget waits, and a budget page offers to save it there as a new
+draft.
 
 ## Admin access
 
@@ -319,7 +324,8 @@ Each milestone can ship alone.
 2. **Calculator split.** Extract `Calculator`. No behavior change.
 3. **Buildings and drafts.** Create buildings, projects, and budgets. Add "Save to account" and autosaved drafts.
 4. **Versions.** Publish, read-only versions with a `readOnly` prop on `Calculator`, restore, and the changelog with
-   `diffBudgets`.
+   `diffBudgets`. The `neon-http` driver in `getDb` has no transactions, so publish needs the WebSocket driver from
+   `@neondatabase/serverless`.
 5. **Sharing.** Roles, invite links, and permission checks for members.
 
 Until milestone 5 ships, only the building admin can reach a budget.
@@ -370,5 +376,6 @@ Until milestone 5 ships, only the building admin can reach a budget.
    only to its author and the building admin.
 3. **What should deleting do?** This plan assumes a hard delete with a typed confirmation. A deleted building cannot be
    restored by the app, and its version history goes with it.
-4. **Should a budget be able to copy from another?** A new FY2028 project will likely start from FY2027. This plan does
-   not include it, and it fits best in milestone 3.
+4. **Should a budget be able to copy from another?** Decided: yes, in milestone 3. A new budget can start as a copy of
+   another budget in the same building. Until versions exist, the copy takes that budget's newest draft. After milestone
+   4 it should take the latest version.

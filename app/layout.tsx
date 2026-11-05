@@ -16,7 +16,7 @@ const plexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "Common Charges Calculator",
-  description: "Frontend-only common charges calculator for buildings and housing associations.",
+  description: "Common charges calculator for buildings and housing associations, with optional accounts for saved budgets.",
 };
 
 export default function RootLayout({
