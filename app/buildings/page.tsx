@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getAuth } from "@/app/_server/services";
+import { PendingSave } from "@/app/_components/pending-save";
+import { BUTTON_CLASS, INPUT_CLASS, LINK_CLASS } from "@/app/_components/styles";
+import { getAuth, getDb, requireUser } from "@/app/_server/services";
+import { listBuildings } from "@/lib/server/store";
+import { createBuildingAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -11,21 +15,42 @@ const logOut = async () => {
 };
 
 export default async function BuildingsPage() {
-  const { data: session } = await getAuth().getSession();
-  if (!session?.user) {
-    redirect("/login");
-  }
+  const user = await requireUser();
+  const buildings = await listBuildings(getDb(), user.id);
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-6 px-6 py-16">
       <h1 className="text-2xl font-semibold">Buildings</h1>
-      <p className="text-sm text-[#5b5148]">Logged in as {session.user.email}.</p>
+      <p className="text-sm text-[#5b5148]">Logged in as {user.email}.</p>
+      <PendingSave />
+      {buildings.length === 0 ? (
+        <p className="text-sm text-[#5b5148]">You have no buildings yet.</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {buildings.map((building) => (
+            <li key={building.id}>
+              <Link href={`/buildings/${building.id}`} className={LINK_CLASS}>
+                {building.name}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form action={createBuildingAction} className="flex items-end gap-3">
+        <label className="flex flex-1 flex-col gap-1 text-sm">
+          New building
+          <input name="name" required maxLength={200} placeholder="Maple Court" className={INPUT_CLASS} />
+        </label>
+        <button type="submit" className={BUTTON_CLASS}>
+          Create
+        </button>
+      </form>
       <div className="flex items-center gap-4">
         <Link href="/" className="text-sm underline">
           Open the calculator
         </Link>
         <form action={logOut}>
-          <button type="submit" className="rounded-xl bg-[#1a1b1f] px-4 py-2 text-sm font-medium text-white">
+          <button type="submit" className={BUTTON_CLASS}>
             Log out
           </button>
         </form>

@@ -2,6 +2,7 @@
 
 import Script from "next/script";
 import { useRef, useState } from "react";
+import { BUTTON_CLASS, INPUT_CLASS } from "@/app/_components/styles";
 import { finishEmailLogin, startEmailLogin } from "./actions";
 import type { FormEvent } from "react";
 
@@ -15,9 +16,6 @@ declare global {
     turnstile?: TurnstileApi;
   }
 }
-
-const INPUT_CLASS = "w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm";
-const BUTTON_CLASS = "rounded-xl bg-[#1a1b1f] px-4 py-2 text-sm font-medium text-white disabled:opacity-50";
 
 export const LoginForm = ({ siteKey }: { siteKey: string }) => {
   const [step, setStep] = useState<"email" | "code">("email");

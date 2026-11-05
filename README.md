@@ -1,8 +1,8 @@
 # Common Charges Calculator
 
-Frontend-only tool for splitting a building's annual expenses into per-unit and per-owner common charges. Works for
-condos, co-ops, TICs, and similar associations. Define owners, units (with type and common interest), expenses, and the
-policies that decide how each expense is split. The calculator shows annual and monthly charges instantly.
+Tool for splitting a building's annual expenses into per-unit and per-owner common charges. Works for condos, co-ops,
+TICs, and similar associations. Define owners, units (with type and common interest), expenses, and the policies that
+decide how each expense is split. The calculator shows annual and monthly charges instantly.
 
 ## Features
 
@@ -13,6 +13,7 @@ policies that decide how each expense is split. The calculator shows annual and 
 - Global adjustments: inflation % on the expense base and a reserve % for savings
 - URL persistence (compressed) so you can bookmark or share a budget
 - JSON export/import
+- Optional accounts: log in with an emailed code to save budgets as drafts under buildings and projects
 - Unit tests + coverage
 
 ## Getting started
@@ -37,5 +38,7 @@ npm run build
 
 ## Notes
 
-- All calculations run locally in the browser. Data never leaves your machine.
-- State is stored in the URL, so saving the page or sharing the link preserves the budget.
+- Without an account, all calculations run in the browser and the budget is stored in the URL, so saving the page or
+  sharing the link preserves the budget. Loading the page sends that URL to Vercel.
+- A budget saved to an account is stored in the app's Neon Postgres database. Anyone with access to the Neon project can
+  read every saved budget.

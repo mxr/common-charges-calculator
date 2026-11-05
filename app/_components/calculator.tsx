@@ -29,6 +29,7 @@ import {
   UNIT_TYPE_SORT_LABELS,
 } from "../../lib/sort";
 import { ALLOCATION_METHOD_LABELS, ALLOCATION_METHODS, UNIT_CLASSIFICATION_LABELS, UNIT_CLASSIFICATIONS } from "../../lib/types";
+import type { ReactNode } from "react";
 import type { UnitCharge } from "../../lib/allocate";
 import type { ExpenseSortKey, OwnerSortKey, SortState, UnitFilter, UnitSortKey, UnitTypeSortKey } from "../../lib/sort";
 import type { Budget, Expense, Owner, Unit, UnitClassification, UnitType } from "../../lib/types";
@@ -39,7 +40,7 @@ const sectionHint = "text-sm text-[#5b5148]";
 const fieldBase =
   "h-10 rounded-xl border border-[#e6d7c7] bg-[#fefbf7] px-3 text-sm font-medium text-[#1d1b18] outline-none transition focus:border-[#c9a888] focus:ring-2 focus:ring-[#edc9a6]/60";
 const field = `${fieldBase} w-full`;
-const pillButton =
+export const pillButton =
   "inline-flex items-center gap-2 rounded-full border border-[#1b1a17] px-4 py-2 text-sm font-semibold text-[#1b1a17] transition hover:-translate-y-0.5 hover:bg-[#f1e7db]";
 const solidButton =
   "inline-flex items-center gap-2 rounded-full bg-[#1b1a17] px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(30,27,23,0.2)] transition hover:-translate-y-0.5 hover:bg-[#2d2a25]";
@@ -95,7 +96,16 @@ export function replaceSearchParams(updates: Record<string, string>) {
   }
 }
 
-export function Calculator({ initialBudget, onBudgetChange }: { initialBudget: Budget; onBudgetChange: (budget: Budget) => void }) {
+type CalculatorProps = {
+  initialBudget: Budget;
+  onBudgetChange: (budget: Budget) => void;
+  // Replaces the default description under the heading.
+  intro?: ReactNode;
+  // Extra controls after the built-in header buttons.
+  actions?: ReactNode;
+};
+
+export function Calculator({ initialBudget, onBudgetChange, intro, actions }: CalculatorProps) {
   const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [copied, setCopied] = useState(false);
@@ -684,8 +694,12 @@ export function Calculator({ initialBudget, onBudgetChange }: { initialBudget: B
           <div className="text-sm uppercase tracking-[0.3em] text-[#7b6a5b]">Common Charges Calculator</div>
           <h1 className="text-4xl font-semibold tracking-tight text-[#161515] sm:text-5xl">Split building expenses fairly.</h1>
           <p className="max-w-3xl text-base text-[#4a4037] sm:text-lg">
-            Define owners, units, expenses, and the policies that decide how each expense is split. Charges update instantly. Everything
-            runs locally in your browser and is stored in the URL, so you can bookmark or share a budget.
+            {intro ?? (
+              <>
+                Define owners, units, expenses, and the policies that decide how each expense is split. Charges update instantly. Everything
+                runs locally in your browser and is stored in the URL, so you can bookmark or share a budget.
+              </>
+            )}
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <button type="button" className={solidButton} onClick={handleCopyLink}>
@@ -700,6 +714,7 @@ export function Calculator({ initialBudget, onBudgetChange }: { initialBudget: B
             <button type="button" className={pillButton} onClick={() => setBudget(structuredClone(DEFAULT_BUDGET))}>
               Reset to sample
             </button>
+            {actions}
             <input ref={fileInputRef} type="file" accept=".json,application/json" onChange={handleImport} className="hidden" />
           </div>
         </header>

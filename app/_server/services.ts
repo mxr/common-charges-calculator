@@ -1,5 +1,6 @@
 import { createNeonAuth } from "@neon/auth/next/server";
 import { drizzle } from "drizzle-orm/neon-http";
+import { redirect } from "next/navigation";
 import nodemailer from "nodemailer";
 import type { Db } from "@/lib/server/login";
 
@@ -63,3 +64,12 @@ export const getSiteKey = (): string => requireEnv("CLOUDFLARE_TURNSTILE_SITE_KE
 export const getTurnstileSecret = (): string => requireEnv("CLOUDFLARE_TURNSTILE_SECRET_KEY");
 
 export const getNeonAuthBaseUrl = (): string => requireEnv("NEON_AUTH_BASE_URL");
+
+// Pages and Server Actions call this first. The proxy also redirects, but a Server Action can be called directly.
+export const requireUser = async (): Promise<{ id: string; email: string }> => {
+  const { data: session } = await getAuth().getSession();
+  if (!session?.user) {
+    redirect("/login");
+  }
+  return session.user;
+};
