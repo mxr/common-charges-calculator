@@ -1,6 +1,6 @@
 # Backend plan
 
-Status: in progress. Milestone 1 shipped in v0.8.0. Milestones 2 and 3 merged. Milestone 4 is in review.
+Status: in progress. Milestone 1 shipped in v0.8.0. Milestones 2, 3, and 4 merged. Milestone 5 is in review.
 
 ## Goal
 
@@ -200,6 +200,7 @@ create table otp_send (
 | See published versions and the changelog      | Yes    | Yes         | Yes            |
 | See drafts                                    | No     | Yes         | Yes            |
 | Create a draft                                | No     | Yes         | Yes            |
+| See another editor's draft, read-only         | No     | Yes         | Yes            |
 | Edit a draft                                  | No     | Author only | Author only    |
 | Publish a draft                               | No     | Author only | Any draft      |
 | Delete a draft                                | No     | Author only | Any draft      |
@@ -211,6 +212,29 @@ A member can see the name of the building and project that contain a shared budg
 that building.
 
 A role is stored only on the budget, as requested. A building admin is not stored in `budget_member`.
+
+`/buildings` lists the buildings an account administers and the buildings that hold budgets shared with it. A member's
+building page shows only the shared budgets and the projects that hold them.
+
+When the admin removes a member, or changes an editor to a viewer, that person's drafts stay. The admin can still
+publish or delete them, and the person can open them again if their access comes back. Members cannot leave a budget by
+themselves. The admin removes them.
+
+## Invites
+
+1. The building admin creates an invite link on the budget page and chooses `viewer` or `editor`. The app stores only a
+   SHA-256 hash of the token, so the page shows the link once.
+2. The admin sends the link themselves. The app does not email it.
+3. A logged-out person who opens `/invites/[token]` clicks "Log in to accept". The Neon middleware redirects to `/login`
+   without a return URL, so `/invites` sits outside the proxy, and the button stores the token in `localStorage`. After
+   login, `/buildings` sends the person back to the invite.
+4. A logged-in person sees the budget name and role, and clicks "Accept". Accepting runs in a transaction that locks the
+   invite row, adds a `budget_member` row, and marks the invite accepted.
+5. A link expires 7 days after it is created and works once. A revoked link is deleted, so it reads as not found.
+6. An account that can already reach the budget, as a member or as the admin, goes straight to the budget. Its role does
+   not change, and the link stays unused. To change a role, the admin uses the members list.
+
+The budget URL is the link to share with someone who already has access.
 
 ## Draft and publish flow
 
@@ -334,8 +358,6 @@ Each milestone can ship alone.
    `@neondatabase/serverless`.
 5. **Sharing.** Roles, invite links, and permission checks for members.
 
-Until milestone 5 ships, only the building admin can reach a budget.
-
 ## Verify before building
 
 - [x] The Neon project shows the free plan through the Vercel integration. Vercel lists the installation as `Free`.
@@ -376,10 +398,9 @@ Until milestone 5 ships, only the building admin can reach a budget.
 
 ## Open questions
 
-1. **Should invites go by email?** This plan assumes no. A building admin creates a link and sends it themselves, which
-   avoids an email provider. Links expire after 7 days and work once.
-2. **Should other editors see a draft?** This plan assumes yes, read-only. The alternative is that a draft stays visible
-   only to its author and the building admin.
+1. **Should invites go by email?** Decided: no, in milestone 5. A building admin creates a link and sends it themselves,
+   which avoids an email provider. Links expire after 7 days and work once.
+2. **Should other editors see a draft?** Decided: yes, read-only, in milestone 5. Only the author edits a draft.
 3. **What should deleting do?** This plan assumes a hard delete with a typed confirmation. A deleted building cannot be
    restored by the app, and its version history goes with it.
 4. **Should a budget be able to copy from another?** Decided: yes, in milestone 3. A new budget can start as a copy of

@@ -1,4 +1,5 @@
-import { bigint, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { bigint, check, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import type { Budget } from "../types";
 
 export const otpGate = pgTable("otp_gate", {
@@ -86,4 +87,42 @@ export const budgetVersion = pgTable(
     publishedAt: timestamp("published_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.budgetId, table.number] })],
+);
+
+export const ROLES = ["viewer", "editor"] as const;
+
+// A building admin has full access without a row here.
+export const budgetMember = pgTable(
+  "budget_member",
+  {
+    budgetId: uuid("budget_id")
+      .notNull()
+      .references(() => budget.id, { onDelete: "cascade" }),
+    // A neon_auth user id.
+    userId: uuid("user_id").notNull(),
+    role: text({ enum: ROLES }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.budgetId, table.userId] }),
+    index().on(table.userId),
+    check("budget_member_role_check", sql`${table.role} in ('viewer', 'editor')`),
+  ],
+);
+
+// An invite link. Only a hash of its token is stored, so the link is shown once, when it is made.
+export const budgetInvite = pgTable(
+  "budget_invite",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    budgetId: uuid("budget_id")
+      .notNull()
+      .references(() => budget.id, { onDelete: "cascade" }),
+    role: text({ enum: ROLES }).notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    createdBy: uuid("created_by").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedBy: uuid("accepted_by"),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  },
+  (table) => [index().on(table.budgetId), check("budget_invite_role_check", sql`${table.role} in ('viewer', 'editor')`)],
 );

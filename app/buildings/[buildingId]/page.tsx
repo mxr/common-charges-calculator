@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PendingSave } from "@/app/_components/pending-save";
 import { BUTTON_CLASS, INPUT_CLASS, LINK_CLASS } from "@/app/_components/styles";
 import { getDb, requireUser } from "@/app/_server/services";
-import { adminOfBuilding } from "@/lib/server/access";
+import { accessBuilding } from "@/lib/server/access";
 import { getBuilding } from "@/lib/server/store";
 import { createBudgetAction, createProjectAction } from "../actions";
 
@@ -13,7 +13,7 @@ export default async function BuildingPage({ params }: { params: Promise<{ build
   const { buildingId } = await params;
   const user = await requireUser();
   const db = getDb();
-  const access = await adminOfBuilding(db, user.id, buildingId);
+  const access = await accessBuilding(db, user.id, buildingId);
   if (access === null) {
     notFound();
   }
@@ -29,6 +29,7 @@ export default async function BuildingPage({ params }: { params: Promise<{ build
       </nav>
       <h1 className="text-2xl font-semibold">{building.name}</h1>
       <PendingSave />
+      {access.isAdmin ? null : <p className="text-sm text-[#5b5148]">This building has budgets shared with you.</p>}
       {building.projects.length === 0 ? <p className="text-sm text-[#5b5148]">This building has no projects yet.</p> : null}
       {building.projects.map((project) => (
         <section key={project.id} className="flex flex-col gap-3 rounded-2xl border border-black/10 p-4">
@@ -46,39 +47,43 @@ export default async function BuildingPage({ params }: { params: Promise<{ build
               ))}
             </ul>
           )}
-          <form action={createBudgetAction.bind(null, project.id)} className="flex flex-wrap items-end gap-3">
-            <label className="flex flex-1 flex-col gap-1 text-sm">
-              New budget
-              <input name="name" required maxLength={200} placeholder="Base case" className={INPUT_CLASS} />
-            </label>
-            {allBudgets.length === 0 ? null : (
+          {access.isAdmin ? (
+            <form action={createBudgetAction.bind(null, project.id)} className="flex flex-wrap items-end gap-3">
               <label className="flex flex-1 flex-col gap-1 text-sm">
-                Start from
-                <select name="copyFrom" defaultValue="" className={INPUT_CLASS}>
-                  <option value="">An empty budget</option>
-                  {allBudgets.map((budget) => (
-                    <option key={budget.id} value={budget.id}>
-                      A copy of {budget.project} / {budget.name}
-                    </option>
-                  ))}
-                </select>
+                New budget
+                <input name="name" required maxLength={200} placeholder="Base case" className={INPUT_CLASS} />
               </label>
-            )}
-            <button type="submit" className={BUTTON_CLASS}>
-              Create
-            </button>
-          </form>
+              {allBudgets.length === 0 ? null : (
+                <label className="flex flex-1 flex-col gap-1 text-sm">
+                  Start from
+                  <select name="copyFrom" defaultValue="" className={INPUT_CLASS}>
+                    <option value="">An empty budget</option>
+                    {allBudgets.map((budget) => (
+                      <option key={budget.id} value={budget.id}>
+                        A copy of {budget.project} / {budget.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <button type="submit" className={BUTTON_CLASS}>
+                Create
+              </button>
+            </form>
+          ) : null}
         </section>
       ))}
-      <form action={createProjectAction.bind(null, buildingId)} className="flex items-end gap-3">
-        <label className="flex flex-1 flex-col gap-1 text-sm">
-          New project
-          <input name="name" required maxLength={200} placeholder="FY2027" className={INPUT_CLASS} />
-        </label>
-        <button type="submit" className={BUTTON_CLASS}>
-          Create
-        </button>
-      </form>
+      {access.isAdmin ? (
+        <form action={createProjectAction.bind(null, buildingId)} className="flex items-end gap-3">
+          <label className="flex flex-1 flex-col gap-1 text-sm">
+            New project
+            <input name="name" required maxLength={200} placeholder="FY2027" className={INPUT_CLASS} />
+          </label>
+          <button type="submit" className={BUTTON_CLASS}>
+            Create
+          </button>
+        </form>
+      ) : null}
     </main>
   );
 }

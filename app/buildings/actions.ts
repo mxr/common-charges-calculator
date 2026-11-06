@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { getDb, requireUser } from "@/app/_server/services";
-import { accessBudget, adminOfBuilding, adminOfProject } from "@/lib/server/access";
+import { accessBudget, adminOfBudget, adminOfBuilding, adminOfProject } from "@/lib/server/access";
 import { createBudget, createBuilding, createProject, parseName } from "@/lib/server/store";
 
 export const createBuildingAction = async (form: FormData): Promise<void> => {
@@ -32,7 +32,9 @@ export const createBudgetAction = async (projectId: string, form: FormData): Pro
   const access = await adminOfProject(db, userId, projectId);
   const name = parseName(form.get("name"));
   const copyFromId = form.get("copyFrom");
-  const copyFrom = typeof copyFromId === "string" && copyFromId !== "" ? await accessBudget(db, userId, copyFromId) : null;
+  const copyAccess = typeof copyFromId === "string" && copyFromId !== "" ? await accessBudget(db, userId, copyFromId) : null;
+  // Copying can start from a draft, so it needs the admin's access to the copied budget.
+  const copyFrom = copyAccess === null ? null : adminOfBudget(copyAccess);
   if (access === null || name === null || (copyFromId && copyFrom === null)) {
     return;
   }
