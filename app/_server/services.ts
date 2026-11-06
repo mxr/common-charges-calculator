@@ -1,5 +1,7 @@
 import { createNeonAuth } from "@neon/auth/next/server";
+import { Pool } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
+import { drizzle as drizzleWebSocket } from "drizzle-orm/neon-serverless";
 import { redirect } from "next/navigation";
 import nodemailer from "nodemailer";
 import type { Db } from "@/lib/server/login";
@@ -38,6 +40,17 @@ type EmailOtpApi = {
 export const getEmailOtpAuth = (): EmailOtpApi => getAuth() as unknown as EmailOtpApi;
 
 export const getDb = once((): Db => drizzle(requireEnv("DATABASE_URL")));
+
+// neon-http has no transactions, so a transaction runs over a WebSocket Pool. The socket must not outlive the request,
+// so each call opens its own Pool and closes it.
+export const withTransactions = async <T>(use: (db: Db) => Promise<T>): Promise<T> => {
+  const pool = new Pool({ connectionString: requireEnv("DATABASE_URL") });
+  try {
+    return await use(drizzleWebSocket({ client: pool }));
+  } finally {
+    await pool.end();
+  }
+};
 
 const getMailer = once(() =>
   nodemailer.createTransport({

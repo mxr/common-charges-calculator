@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Calculator } from "@/app/_components/calculator";
 import { saveDraftAction } from "../../../actions";
+import { PublishButton } from "../../publish-button";
 import type { ReactNode } from "react";
 import type { Budget } from "@/lib/types";
 
@@ -28,24 +29,19 @@ export const DraftEditor = ({ budgetId, draftId, revision: initialRevision, init
   const [status, setStatus] = useState<SaveStatus>("saved");
   const revision = useRef(initialRevision);
   const unsaved = useRef<Budget | null>(null);
-  const saving = useRef(false);
+  // The running save loop, so a publish can wait for it.
+  const saving = useRef<Promise<void> | null>(null);
   const stopped = useRef(false);
   const timer = useRef<number | undefined>(undefined);
 
   // One save runs at a time. Edits made during a save go out after it, with the new revision.
-  const flush = useCallback(async () => {
-    window.clearTimeout(timer.current);
-    if (saving.current || stopped.current) {
-      return;
-    }
-    saving.current = true;
+  const saveAll = useCallback(async () => {
     while (unsaved.current !== null) {
       const content = unsaved.current;
       unsaved.current = null;
       setStatus("saving");
       const result = await saveDraftAction(budgetId, draftId, revision.current, content).catch(() => ({ status: "error" as const }));
       if (result.status !== "saved") {
-        saving.current = false;
         stopped.current = result.status !== "error";
         unsaved.current ??= content;
         setStatus(result.status);
@@ -53,9 +49,26 @@ export const DraftEditor = ({ budgetId, draftId, revision: initialRevision, init
       }
       revision.current = result.revision;
     }
-    saving.current = false;
     setStatus("saved");
   }, [budgetId, draftId]);
+
+  // Resolves when the edits so far are saved, or the save failed.
+  const flush = useCallback((): Promise<void> => {
+    window.clearTimeout(timer.current);
+    if (stopped.current) {
+      return Promise.resolve();
+    }
+    saving.current ??= saveAll().finally(() => {
+      saving.current = null;
+    });
+    return saving.current;
+  }, [saveAll]);
+
+  // Publishing sends the revision it saved, so the version holds exactly what the author sees.
+  const savedRevision = useCallback(async (): Promise<number | null> => {
+    await flush();
+    return unsaved.current === null && !stopped.current ? revision.current : null;
+  }, [flush]);
 
   const onBudgetChange = useCallback(
     (budget: Budget) => {
@@ -73,7 +86,7 @@ export const DraftEditor = ({ budgetId, draftId, revision: initialRevision, init
   // Leaving through a link saves right away. Closing the tab with unsaved edits asks first.
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
-      if (unsaved.current !== null || saving.current) {
+      if (unsaved.current !== null || saving.current !== null) {
         event.preventDefault();
       }
     };
@@ -91,9 +104,12 @@ export const DraftEditor = ({ budgetId, draftId, revision: initialRevision, init
         onBudgetChange={onBudgetChange}
         intro={intro}
         actions={
-          <span role="status" className="text-sm text-[#5b5148]">
-            {STATUS_TEXT[status]}
-          </span>
+          <>
+            <span role="status" className="text-sm text-[#5b5148]">
+              {STATUS_TEXT[status]}
+            </span>
+            <PublishButton budgetId={budgetId} draftId={draftId} revision={initialRevision} beforePublish={savedRevision} />
+          </>
         }
       />
     </Suspense>

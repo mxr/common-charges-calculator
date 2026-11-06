@@ -35,7 +35,11 @@ export default async function DraftPage({ params }: { params: Promise<{ budgetId
           <Link href={`/budgets/${budgetId}`} className={LINK_CLASS}>
             {budget.name}
           </Link>
-          {` / ${draft.name}. Changes save to your account as you work.`}
+          {` / ${draft.name}. ${draft.baseVersion === 0 ? "Not from a version." : `From version ${draft.baseVersion}.`}`}
+          {draft.baseVersion < budget.latestVersion
+            ? ` Version ${budget.latestVersion} is newer, so publishing shows what would change first.`
+            : ""}
+          {" Changes save to your account as you work."}
         </>
       }
     />

@@ -1,22 +1,38 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { getDb, requireUser } from "@/app/_server/services";
+import { getDb, requireUser, withTransactions } from "@/app/_server/services";
 import { EMPTY_BUDGET, normalizeBudget } from "@/lib/budget";
 import { parseBudgetUrl } from "@/lib/serialize";
 import { accessBudget, accessDraft, authorOfDraft } from "@/lib/server/access";
-import { createDraft, deleteDraft, parseName, saveDraft } from "@/lib/server/store";
-import type { SaveResult } from "@/lib/server/store";
+import {
+  createDraft,
+  createDraftFromVersion,
+  deleteDraft,
+  parseName,
+  parseNote,
+  parseVersionNumber,
+  publishDraft,
+  saveDraft,
+} from "@/lib/server/store";
+import type { PublishResult, SaveResult } from "@/lib/server/store";
 
+// An empty `from` starts an empty draft. A version number starts from that version, which is how a restore begins.
 export const createDraftAction = async (budgetId: string, form: FormData): Promise<void> => {
   const { id: userId } = await requireUser();
   const db = getDb();
   const access = await accessBudget(db, userId, budgetId);
   const name = parseName(form.get("name"));
-  if (access === null || name === null) {
+  const from = form.get("from") ?? "";
+  const number = parseVersionNumber(from);
+  if (access === null || name === null || (from !== "" && number === null)) {
     return;
   }
-  redirect(`/budgets/${budgetId}/drafts/${await createDraft(db, access, name, EMPTY_BUDGET)}`);
+  const draftId =
+    number === null ? await createDraft(db, access, name, EMPTY_BUDGET) : await createDraftFromVersion(db, access, name, number);
+  if (draftId !== null) {
+    redirect(`/budgets/${budgetId}/drafts/${draftId}`);
+  }
 };
 
 export const deleteDraftAction = async (budgetId: string, draftId: string): Promise<void> => {
@@ -40,6 +56,28 @@ export const saveDraftAction = async (budgetId: string, draftId: string, revisio
     return { status: "missing" };
   }
   return saveDraft(db, author, revision, normalizeBudget(content));
+};
+
+export type PublishDraftResult = PublishResult | { status: "invalid" };
+
+export const publishDraftAction = async (
+  budgetId: string,
+  draftId: string,
+  revision: number,
+  note: string,
+  confirmedLatest: number,
+): Promise<PublishDraftResult> => {
+  const { id: userId } = await requireUser();
+  const access = await accessDraft(getDb(), userId, budgetId, draftId);
+  const parsedNote = parseNote(note);
+  if (access === null) {
+    return { status: "missing" };
+  }
+  if (parsedNote === null || !Number.isInteger(revision) || !Number.isInteger(confirmedLatest)) {
+    return { status: "invalid" };
+  }
+  // Until sharing ships, only the building admin reaches a draft, and the admin may publish any draft.
+  return withTransactions((db) => publishDraft(db, access, { revision, note: parsedNote, confirmedLatest }));
 };
 
 const CALCULATOR_DRAFT_NAME = "From the calculator";

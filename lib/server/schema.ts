@@ -1,4 +1,4 @@
-import { bigint, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import type { Budget } from "../types";
 
 export const otpGate = pgTable("otp_gate", {
@@ -68,4 +68,22 @@ export const budgetDraft = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index().on(table.budgetId)],
+);
+
+// A published snapshot. It never changes, and the primary key stops two publishes from taking one number.
+export const budgetVersion = pgTable(
+  "budget_version",
+  {
+    budgetId: uuid("budget_id")
+      .notNull()
+      .references(() => budget.id, { onDelete: "cascade" }),
+    number: integer().notNull(),
+    // The version the draft started from. 0 means an empty budget.
+    basedOn: integer("based_on").notNull(),
+    note: text().notNull().default(""),
+    content: jsonb().$type<Budget>().notNull(),
+    publishedBy: uuid("published_by").notNull(),
+    publishedAt: timestamp("published_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.budgetId, table.number] })],
 );
