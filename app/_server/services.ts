@@ -64,10 +64,12 @@ const getMailer = once(() =>
 );
 
 export const sendLoginCode = async (email: string, code: string): Promise<void> => {
+  // Local dev has no VERCEL_ENV.
+  const env = process.env["VERCEL_ENV"] ?? "development";
   await getMailer().sendMail({
     from: `Common Charges Calculator <${requireEnv("GMAIL_USER")}>`,
     to: email,
-    subject: `${code} is your login code`,
+    subject: `${env === "production" ? "" : `[${env}] `}${code} is your login code`,
     text: `Your Common Charges Calculator login code is ${code}.\n\nIf you did not ask for it, ignore this email.`,
   });
 };
