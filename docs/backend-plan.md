@@ -1,6 +1,6 @@
 # Backend plan
 
-Status: in progress. Milestone 1 shipped in v0.8.0. Milestone 2 merged. Milestone 3 is in review.
+Status: in progress. Milestone 1 shipped in v0.8.0. Milestones 2 and 3 merged. Milestone 4 is in review.
 
 ## Goal
 
@@ -233,7 +233,12 @@ stays complete.
 
 The changelog lists `budget_version` rows. A new function, `diffBudgets` in `lib/diff.ts`, compares two snapshots and
 reports added, removed, and changed entries. It also compares results from `computeCharges`, so a reader can see how a
-change affects each unit.
+change affects each unit. Each entry compares a version with the one before it. Order is not compared, because it does
+not change what anyone pays.
+
+`getDb` uses `neon-http`, which has no transactions. Publish opens a WebSocket `Pool` from `@neondatabase/serverless`
+for each call and closes it before the request ends. The changelog shows the publisher's email from `neon_auth.user`,
+which `lib/server/auth-schema.ts` defines outside `schema.ts` so migrations never touch it.
 
 ## Routes
 
@@ -270,11 +275,12 @@ leaves your machine".
 ## Changes to existing code
 
 `Calculator` in `app/_components/calculator.tsx` owns the budget state. It takes `initialBudget` and calls
-`onBudgetChange` with each new budget, including the first. Milestone 4 adds `readOnly`, when the version page needs it.
+`onBudgetChange` with each new budget, including the first. With `readOnly`, it hides the controls that change the
+budget and disables its fields, while sorting, filtering, tabs, and collapsing still work.
 
 - `/` passes the budget from `parseBudgetUrl` and keeps the `syncUrlState` behavior.
 - The draft editor passes the draft content and saves through `onBudgetChange`.
-- The version page will set `readOnly`.
+- The version page sets `readOnly`.
 - The `c` and `s` params keep working on every route. Only `/` writes `b`.
 
 Two components write to the URL, so `replaceSearchParams` reads the current URL on each call. A copy from
@@ -377,5 +383,5 @@ Until milestone 5 ships, only the building admin can reach a budget.
 3. **What should deleting do?** This plan assumes a hard delete with a typed confirmation. A deleted building cannot be
    restored by the app, and its version history goes with it.
 4. **Should a budget be able to copy from another?** Decided: yes, in milestone 3. A new budget can start as a copy of
-   another budget in the same building. Until versions exist, the copy takes that budget's newest draft. After milestone
-   4 it should take the latest version.
+   another budget in the same building. The copy takes that budget's latest version, or its newest draft when nothing is
+   published.

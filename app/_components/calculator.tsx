@@ -29,6 +29,7 @@ import {
   UNIT_TYPE_SORT_LABELS,
 } from "../../lib/sort";
 import { ALLOCATION_METHOD_LABELS, ALLOCATION_METHODS, UNIT_CLASSIFICATION_LABELS, UNIT_CLASSIFICATIONS } from "../../lib/types";
+import { PILL_BUTTON_CLASS } from "./styles";
 import type { ReactNode } from "react";
 import type { UnitCharge } from "../../lib/allocate";
 import type { ExpenseSortKey, OwnerSortKey, SortState, UnitFilter, UnitSortKey, UnitTypeSortKey } from "../../lib/sort";
@@ -40,8 +41,8 @@ const sectionHint = "text-sm text-[#5b5148]";
 const fieldBase =
   "h-10 rounded-xl border border-[#e6d7c7] bg-[#fefbf7] px-3 text-sm font-medium text-[#1d1b18] outline-none transition focus:border-[#c9a888] focus:ring-2 focus:ring-[#edc9a6]/60";
 const field = `${fieldBase} w-full`;
-export const pillButton =
-  "inline-flex items-center gap-2 rounded-full border border-[#1b1a17] px-4 py-2 text-sm font-semibold text-[#1b1a17] transition hover:-translate-y-0.5 hover:bg-[#f1e7db]";
+// Server components import it from ./styles, because a value from a client module reaches them as a reference.
+export const pillButton = PILL_BUTTON_CLASS;
 const solidButton =
   "inline-flex items-center gap-2 rounded-full bg-[#1b1a17] px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(30,27,23,0.2)] transition hover:-translate-y-0.5 hover:bg-[#2d2a25]";
 const dangerButton =
@@ -98,14 +99,16 @@ export function replaceSearchParams(updates: Record<string, string>) {
 
 type CalculatorProps = {
   initialBudget: Budget;
-  onBudgetChange: (budget: Budget) => void;
+  onBudgetChange?: (budget: Budget) => void;
+  // Shows the budget without controls that change it. Sorting, filtering, and collapsing still work.
+  readOnly?: boolean;
   // Replaces the default description under the heading.
   intro?: ReactNode;
   // Extra controls after the built-in header buttons.
   actions?: ReactNode;
 };
 
-export function Calculator({ initialBudget, onBudgetChange, intro, actions }: CalculatorProps) {
+export function Calculator({ initialBudget, onBudgetChange, readOnly = false, intro, actions }: CalculatorProps) {
   const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [copied, setCopied] = useState(false);
@@ -418,7 +421,7 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
 
   const sortParam = serializeSortParam(ownerSort, unitSort, unitTypeSort, expenseSort);
   const tabParam = activeTab === "rules" ? "1" : "";
-  useEffect(() => onBudgetChange(budget), [budget, onBudgetChange]);
+  useEffect(() => onBudgetChange?.(budget), [budget, onBudgetChange]);
   useEffect(
     function syncUrlState() {
       replaceSearchParams({ c: collapsedParam, s: sortParam, t: tabParam });
@@ -553,14 +556,16 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
             patch((draft) => ({ ...draft, units: draft.units.map((u) => (u.id === unit.id ? { ...u, tags: next } : u)) }))
           }
         />
-        <button
-          type="button"
-          className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-          aria-label="Remove unit"
-          onClick={() => patch((draft) => ({ ...draft, units: draft.units.filter((u) => u.id !== unit.id) }))}
-        >
-          <TrashIcon />
-        </button>
+        {readOnly ? null : (
+          <button
+            type="button"
+            className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+            aria-label="Remove unit"
+            onClick={() => patch((draft) => ({ ...draft, units: draft.units.filter((u) => u.id !== unit.id) }))}
+          >
+            <TrashIcon />
+          </button>
+        )}
       </div>
     );
   };
@@ -708,12 +713,16 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
             <button type="button" className={pillButton} onClick={handleExport}>
               Export JSON
             </button>
-            <button type="button" className={pillButton} onClick={() => fileInputRef.current?.click()}>
-              Import JSON
-            </button>
-            <button type="button" className={pillButton} onClick={() => setBudget(structuredClone(DEFAULT_BUDGET))}>
-              Reset to sample
-            </button>
+            {readOnly ? null : (
+              <>
+                <button type="button" className={pillButton} onClick={() => fileInputRef.current?.click()}>
+                  Import JSON
+                </button>
+                <button type="button" className={pillButton} onClick={() => setBudget(structuredClone(DEFAULT_BUDGET))}>
+                  Reset to sample
+                </button>
+              </>
+            )}
             {actions}
             <input ref={fileInputRef} type="file" accept=".json,application/json" onChange={handleImport} className="hidden" />
           </div>
@@ -789,15 +798,19 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                       </div>
                     </div>
                   ) : null}
-                  <button type="button" className={pillButton} onClick={() => addOwnerAndFocus("New owner")}>
-                    Add owner
-                  </button>
-                  <button type="button" className={pillButton} onClick={() => setBatch("owner")}>
-                    Batch add
-                  </button>
-                  <button type="button" className={dangerButton} onClick={() => patch((draft) => ({ ...draft, owners: [] }))}>
-                    Delete all
-                  </button>
+                  {readOnly ? null : (
+                    <>
+                      <button type="button" className={pillButton} onClick={() => addOwnerAndFocus("New owner")}>
+                        Add owner
+                      </button>
+                      <button type="button" className={pillButton} onClick={() => setBatch("owner")}>
+                        Batch add
+                      </button>
+                      <button type="button" className={dangerButton} onClick={() => patch((draft) => ({ ...draft, owners: [] }))}>
+                        Delete all
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
               {collapsedOwners ? null : (
@@ -807,77 +820,83 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                     units. Board units don't pay common charges; their share is spread across all other units by common interest.
                   </p>
                   <div className="mt-4 overflow-x-auto">
-                    <table className="w-full border-collapse text-sm">
-                      <thead>
-                        <tr className="border-b border-[#eadccb] text-left text-xs font-semibold uppercase tracking-[0.2em] text-[#8c7b6c]">
-                          <th className="py-2 pr-4">Owner name</th>
-                          <th className="py-2 pr-4">Current $/mo</th>
-                          <th className="py-2 pl-4 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {applyOrder(budget.owners, ownerOrder, (owner) => owner.id).map((owner, index) => {
-                          return (
-                            <tr key={owner.id} className="border-b border-[#f2e8dd]">
-                              <td className="py-2 pr-4 align-middle">
-                                <TextField
-                                  id={`owner-name-${owner.id}`}
-                                  className={field}
-                                  value={owner.name}
-                                  onChange={(next) =>
-                                    patch((draft) => ({
-                                      ...draft,
-                                      owners: draft.owners.map((o) => (o.id === owner.id ? { ...o, name: next } : o)),
-                                    }))
-                                  }
-                                  onKeyDown={(event) => handleOwnerTab(event, index === budget.owners.length - 1)}
-                                />
-                              </td>
-                              <td className="py-2 pr-4 align-middle">
-                                <CurrencyField
-                                  className={`${fieldBase} w-28`}
-                                  value={owner.currentMonthly}
-                                  onChange={(next) =>
-                                    patch((draft) => ({
-                                      ...draft,
-                                      owners: draft.owners.map((o) => (o.id === owner.id ? { ...o, currentMonthly: next } : o)),
-                                    }))
-                                  }
-                                />
-                              </td>
-                              <td className="py-2 pl-4 align-middle">
-                                <div className="flex items-center justify-end gap-2">
-                                  <label className="flex items-center gap-1 whitespace-nowrap text-xs text-[#4a4037]">
-                                    <input
-                                      type="radio"
-                                      name="board-owner"
-                                      checked={owner.isBoard}
-                                      onChange={() => {}}
-                                      // A radio can't normally be unchecked, so toggle on click to allow having no board.
-                                      onClick={() =>
-                                        patch((draft) => ({
-                                          ...draft,
-                                          owners: draft.owners.map((o) => ({ ...o, isBoard: o.id === owner.id && !owner.isBoard })),
-                                        }))
-                                      }
-                                    />
-                                    Board
-                                  </label>
-                                  <button
-                                    type="button"
-                                    className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                                    aria-label="Remove owner"
-                                    onClick={() => patch((draft) => ({ ...draft, owners: draft.owners.filter((o) => o.id !== owner.id) }))}
-                                  >
-                                    <TrashIcon />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                    <Locked locked={readOnly}>
+                      <table className="w-full border-collapse text-sm">
+                        <thead>
+                          <tr className="border-b border-[#eadccb] text-left text-xs font-semibold uppercase tracking-[0.2em] text-[#8c7b6c]">
+                            <th className="py-2 pr-4">Owner name</th>
+                            <th className="py-2 pr-4">Current $/mo</th>
+                            <th className="py-2 pl-4 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {applyOrder(budget.owners, ownerOrder, (owner) => owner.id).map((owner, index) => {
+                            return (
+                              <tr key={owner.id} className="border-b border-[#f2e8dd]">
+                                <td className="py-2 pr-4 align-middle">
+                                  <TextField
+                                    id={`owner-name-${owner.id}`}
+                                    className={field}
+                                    value={owner.name}
+                                    onChange={(next) =>
+                                      patch((draft) => ({
+                                        ...draft,
+                                        owners: draft.owners.map((o) => (o.id === owner.id ? { ...o, name: next } : o)),
+                                      }))
+                                    }
+                                    onKeyDown={(event) => handleOwnerTab(event, index === budget.owners.length - 1)}
+                                  />
+                                </td>
+                                <td className="py-2 pr-4 align-middle">
+                                  <CurrencyField
+                                    className={`${fieldBase} w-28`}
+                                    value={owner.currentMonthly}
+                                    onChange={(next) =>
+                                      patch((draft) => ({
+                                        ...draft,
+                                        owners: draft.owners.map((o) => (o.id === owner.id ? { ...o, currentMonthly: next } : o)),
+                                      }))
+                                    }
+                                  />
+                                </td>
+                                <td className="py-2 pl-4 align-middle">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <label className="flex items-center gap-1 whitespace-nowrap text-xs text-[#4a4037]">
+                                      <input
+                                        type="radio"
+                                        name="board-owner"
+                                        checked={owner.isBoard}
+                                        onChange={() => {}}
+                                        // A radio can't normally be unchecked, so toggle on click to allow having no board.
+                                        onClick={() =>
+                                          patch((draft) => ({
+                                            ...draft,
+                                            owners: draft.owners.map((o) => ({ ...o, isBoard: o.id === owner.id && !owner.isBoard })),
+                                          }))
+                                        }
+                                      />
+                                      Board
+                                    </label>
+                                    {readOnly ? null : (
+                                      <button
+                                        type="button"
+                                        className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                        aria-label="Remove owner"
+                                        onClick={() =>
+                                          patch((draft) => ({ ...draft, owners: draft.owners.filter((o) => o.id !== owner.id) }))
+                                        }
+                                      >
+                                        <TrashIcon />
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </Locked>
                   </div>
                   <div className="mt-3 flex items-center justify-between border-t border-[#eadccb] pt-3 text-sm font-semibold text-[#181716]">
                     <span>Total income</span>
@@ -922,15 +941,19 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                       </div>
                     </div>
                   ) : null}
-                  <button type="button" className={pillButton} onClick={() => addUnitTypeAndFocus("New type")}>
-                    Add unit type
-                  </button>
-                  <button type="button" className={pillButton} onClick={() => setBatch("unitType")}>
-                    Batch add
-                  </button>
-                  <button type="button" className={dangerButton} onClick={() => patch((draft) => ({ ...draft, unitTypes: [] }))}>
-                    Delete all
-                  </button>
+                  {readOnly ? null : (
+                    <>
+                      <button type="button" className={pillButton} onClick={() => addUnitTypeAndFocus("New type")}>
+                        Add unit type
+                      </button>
+                      <button type="button" className={pillButton} onClick={() => setBatch("unitType")}>
+                        Batch add
+                      </button>
+                      <button type="button" className={dangerButton} onClick={() => patch((draft) => ({ ...draft, unitTypes: [] }))}>
+                        Delete all
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
               {collapsedUnitTypes ? null : (
@@ -940,64 +963,68 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                     and does not affect charges yet.
                   </p>
                   <div className="mt-4 overflow-x-auto">
-                    <table className="w-full border-collapse text-sm">
-                      <thead>
-                        <tr className="border-b border-[#eadccb] text-left text-xs font-semibold uppercase tracking-[0.2em] text-[#8c7b6c]">
-                          <th className="py-2 pr-4">Type name</th>
-                          <th className="py-2 pr-4">Classification</th>
-                          <th className="py-2 pl-4 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {applyOrder(budget.unitTypes, unitTypeOrder, (type) => type.name).map((type, index) => (
-                          <tr key={type.name} className="border-b border-[#f2e8dd]">
-                            <td className="py-2 pr-4 align-middle">
-                              <TextField
-                                id={`unittype-name-${index}`}
-                                className={field}
-                                value={type.name}
-                                onChange={(next) => renameUnitType(type.name, next)}
-                                onKeyDown={(event) => handleUnitTypeTab(event, index === budget.unitTypes.length - 1)}
-                              />
-                            </td>
-                            <td className="py-2 pr-4 align-middle">
-                              <select
-                                className={`${fieldBase} w-40`}
-                                value={type.classification}
-                                onChange={(event) =>
-                                  patch((draft) => ({
-                                    ...draft,
-                                    unitTypes: draft.unitTypes.map((t) =>
-                                      t.name === type.name ? { ...t, classification: event.target.value as UnitClassification } : t,
-                                    ),
-                                  }))
-                                }
-                              >
-                                {UNIT_CLASSIFICATIONS.map((classification) => (
-                                  <option key={classification} value={classification}>
-                                    {UNIT_CLASSIFICATION_LABELS[classification]}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className="py-2 pl-4 align-middle">
-                              <div className="flex items-center justify-end">
-                                <button
-                                  type="button"
-                                  className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                                  aria-label="Remove unit type"
-                                  onClick={() =>
-                                    patch((draft) => ({ ...draft, unitTypes: draft.unitTypes.filter((t) => t.name !== type.name) }))
+                    <Locked locked={readOnly}>
+                      <table className="w-full border-collapse text-sm">
+                        <thead>
+                          <tr className="border-b border-[#eadccb] text-left text-xs font-semibold uppercase tracking-[0.2em] text-[#8c7b6c]">
+                            <th className="py-2 pr-4">Type name</th>
+                            <th className="py-2 pr-4">Classification</th>
+                            <th className="py-2 pl-4 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {applyOrder(budget.unitTypes, unitTypeOrder, (type) => type.name).map((type, index) => (
+                            <tr key={type.name} className="border-b border-[#f2e8dd]">
+                              <td className="py-2 pr-4 align-middle">
+                                <TextField
+                                  id={`unittype-name-${index}`}
+                                  className={field}
+                                  value={type.name}
+                                  onChange={(next) => renameUnitType(type.name, next)}
+                                  onKeyDown={(event) => handleUnitTypeTab(event, index === budget.unitTypes.length - 1)}
+                                />
+                              </td>
+                              <td className="py-2 pr-4 align-middle">
+                                <select
+                                  className={`${fieldBase} w-40`}
+                                  value={type.classification}
+                                  onChange={(event) =>
+                                    patch((draft) => ({
+                                      ...draft,
+                                      unitTypes: draft.unitTypes.map((t) =>
+                                        t.name === type.name ? { ...t, classification: event.target.value as UnitClassification } : t,
+                                      ),
+                                    }))
                                   }
                                 >
-                                  <TrashIcon />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                                  {UNIT_CLASSIFICATIONS.map((classification) => (
+                                    <option key={classification} value={classification}>
+                                      {UNIT_CLASSIFICATION_LABELS[classification]}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="py-2 pl-4 align-middle">
+                                <div className="flex items-center justify-end">
+                                  {readOnly ? null : (
+                                    <button
+                                      type="button"
+                                      className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                      aria-label="Remove unit type"
+                                      onClick={() =>
+                                        patch((draft) => ({ ...draft, unitTypes: draft.unitTypes.filter((t) => t.name !== type.name) }))
+                                      }
+                                    >
+                                      <TrashIcon />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </Locked>
                     {budget.unitTypes.length === 0 ? <p className="mt-3 text-sm italic text-[#9a8a7b]">No unit types.</p> : null}
                   </div>
                 </>
@@ -1017,51 +1044,55 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                   <span className="text-sm font-normal text-[#9a8a7b]">({budget.units.length})</span>
                 </button>
                 <div className="flex flex-wrap items-center gap-2">
-                  {addingUnit ? (
+                  {readOnly ? null : (
                     <>
-                      <select
-                        // biome-ignore lint/a11y/noAutofocus: opened by the user clicking "Add unit"
-                        autoFocus
-                        className={`${fieldBase} w-48`}
-                        aria-label="Type of new unit"
-                        value=""
-                        onChange={(event) => addUnitAndFocus(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Escape") {
-                            setAddingUnit(false);
-                          }
-                        }}
-                      >
-                        <option value="" disabled>
-                          Pick a unit type…
-                        </option>
-                        {budget.unitTypes.map((type) => (
-                          <option key={type.name} value={type.name}>
-                            {type.name}
-                          </option>
-                        ))}
-                      </select>
-                      <button type="button" className={pillButton} onClick={() => setAddingUnit(false)}>
-                        Cancel
+                      {addingUnit ? (
+                        <>
+                          <select
+                            // biome-ignore lint/a11y/noAutofocus: opened by the user clicking "Add unit"
+                            autoFocus
+                            className={`${fieldBase} w-48`}
+                            aria-label="Type of new unit"
+                            value=""
+                            onChange={(event) => addUnitAndFocus(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Escape") {
+                                setAddingUnit(false);
+                              }
+                            }}
+                          >
+                            <option value="" disabled>
+                              Pick a unit type…
+                            </option>
+                            {budget.unitTypes.map((type) => (
+                              <option key={type.name} value={type.name}>
+                                {type.name}
+                              </option>
+                            ))}
+                          </select>
+                          <button type="button" className={pillButton} onClick={() => setAddingUnit(false)}>
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className={pillButton}
+                          disabled={budget.unitTypes.length === 0}
+                          title={budget.unitTypes.length === 0 ? "Add a unit type first" : undefined}
+                          onClick={() => setAddingUnit(true)}
+                        >
+                          Add unit
+                        </button>
+                      )}
+                      <button type="button" className={pillButton} onClick={() => setBatch("unit")}>
+                        Batch add
+                      </button>
+                      <button type="button" className={dangerButton} onClick={() => patch((draft) => ({ ...draft, units: [] }))}>
+                        Delete all
                       </button>
                     </>
-                  ) : (
-                    <button
-                      type="button"
-                      className={pillButton}
-                      disabled={budget.unitTypes.length === 0}
-                      title={budget.unitTypes.length === 0 ? "Add a unit type first" : undefined}
-                      onClick={() => setAddingUnit(true)}
-                    >
-                      Add unit
-                    </button>
                   )}
-                  <button type="button" className={pillButton} onClick={() => setBatch("unit")}>
-                    Batch add
-                  </button>
-                  <button type="button" className={dangerButton} onClick={() => patch((draft) => ({ ...draft, units: [] }))}>
-                    Delete all
-                  </button>
                 </div>
               </div>
               {collapsedUnits ? null : (
@@ -1176,7 +1207,7 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                             <div className="space-y-2 lg:columns-2 lg:gap-x-6 lg:space-y-0">
                               {group.units.map((unit) => (
                                 <div key={unit.id} className="mb-2 break-inside-avoid">
-                                  {renderUnitRow(unit)}
+                                  <Locked locked={readOnly}>{renderUnitRow(unit)}</Locked>
                                 </div>
                               ))}
                             </div>
@@ -1328,7 +1359,7 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                               <div className="space-y-2 lg:columns-2 lg:gap-x-6 lg:space-y-0">
                                 {group.units.map((unit) => (
                                   <div key={unit.id} className="mb-2 break-inside-avoid">
-                                    {renderAssignmentRow(unit)}
+                                    <Locked locked={readOnly}>{renderAssignmentRow(unit)}</Locked>
                                   </div>
                                 ))}
                               </div>
@@ -1368,23 +1399,25 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                                     <div key={unit.id} className="flex items-center gap-3">
                                       <span className="w-20 shrink-0 text-sm font-medium text-[#1d1b18]">{unit.label || "—"}</span>
                                       <span className="w-24 shrink-0 text-sm text-[#5b5148]">{formatCi(unit.commonInterest)}%</span>
-                                      <button
-                                        type="button"
-                                        aria-label={`Remove unit ${unit.label} from owner`}
-                                        className="flex h-6 w-6 items-center justify-center rounded-full border border-[#f0c8c6] text-[#c0443c] transition hover:border-[#e9a8a4]"
-                                        onClick={() =>
-                                          patch((draft) => ({
-                                            ...draft,
-                                            units: draft.units.map((u) => (u.id === unit.id ? { ...u, ownerId: "" } : u)),
-                                          }))
-                                        }
-                                      >
-                                        ×
-                                      </button>
+                                      {readOnly ? null : (
+                                        <button
+                                          type="button"
+                                          aria-label={`Remove unit ${unit.label} from owner`}
+                                          className="flex h-6 w-6 items-center justify-center rounded-full border border-[#f0c8c6] text-[#c0443c] transition hover:border-[#e9a8a4]"
+                                          onClick={() =>
+                                            patch((draft) => ({
+                                              ...draft,
+                                              units: draft.units.map((u) => (u.id === unit.id ? { ...u, ownerId: "" } : u)),
+                                            }))
+                                          }
+                                        >
+                                          ×
+                                        </button>
+                                      )}
                                     </div>
                                   ))
                                 )}
-                                {unassignedUnits.length > 0 ? (
+                                {!readOnly && unassignedUnits.length > 0 ? (
                                   <div className="mt-1 flex items-center gap-2">
                                     <span className="text-xs text-[#9a8a7b]">Add unit:</span>
                                     <select
@@ -1480,22 +1513,24 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                         >
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
-                              {/* biome-ignore lint/a11y/noStaticElementInteractions: drag handle */}
-                              <span
-                                draggable
-                                onDragStart={(event) => {
-                                  setDragCategory(category);
-                                  const group = (event.currentTarget as HTMLElement).closest("[data-cat]");
-                                  if (group) {
-                                    event.dataTransfer.setDragImage(group, 20, 16);
-                                  }
-                                }}
-                                onDragEnd={() => setDragCategory(null)}
-                                className="cursor-grab select-none text-[#b3a392]"
-                                title={`Drag to reorder category ${category}`}
-                              >
-                                ☰
-                              </span>
+                              {readOnly ? null : (
+                                // biome-ignore lint/a11y/noStaticElementInteractions: drag handle
+                                <span
+                                  draggable
+                                  onDragStart={(event) => {
+                                    setDragCategory(category);
+                                    const group = (event.currentTarget as HTMLElement).closest("[data-cat]");
+                                    if (group) {
+                                      event.dataTransfer.setDragImage(group, 20, 16);
+                                    }
+                                  }}
+                                  onDragEnd={() => setDragCategory(null)}
+                                  className="cursor-grab select-none text-[#b3a392]"
+                                  title={`Drag to reorder category ${category}`}
+                                >
+                                  ☰
+                                </span>
+                              )}
                               <button
                                 type="button"
                                 className="flex items-center"
@@ -1504,7 +1539,11 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                               >
                                 <span className="text-lg leading-none text-[#8c7b6c]">{catCollapsed ? "▸" : "▾"}</span>
                               </button>
-                              <CategoryName category={category} onRename={renameCategory} />
+                              {readOnly ? (
+                                <span className="text-sm font-semibold text-[#1d1b18]">{category}</span>
+                              ) : (
+                                <CategoryName category={category} onRename={renameCategory} />
+                              )}
                               {catCollapsed && items.length > 0 ? (
                                 <span className="text-xs text-[#9a8a7b]">
                                   {items.length} item{items.length !== 1 ? "s" : ""} &middot; {formatCurrency(categoryTotal)}/yr
@@ -1532,64 +1571,70 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                                   })}
                                 </div>
                               ) : null}
-                              <button
-                                type="button"
-                                className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                                aria-label={`Remove category ${category}`}
-                                onClick={() =>
-                                  patch((draft) => ({
-                                    ...draft,
-                                    categories: draft.categories.filter((item) => item !== category),
-                                    expenses: draft.expenses.filter((expense) => expense.category !== category),
-                                  }))
-                                }
-                              >
-                                <TrashIcon />
-                              </button>
+                              {readOnly ? null : (
+                                <button
+                                  type="button"
+                                  className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                  aria-label={`Remove category ${category}`}
+                                  onClick={() =>
+                                    patch((draft) => ({
+                                      ...draft,
+                                      categories: draft.categories.filter((item) => item !== category),
+                                      expenses: draft.expenses.filter((expense) => expense.category !== category),
+                                    }))
+                                  }
+                                >
+                                  <TrashIcon />
+                                </button>
+                              )}
                             </div>
                           </div>
                           {!catCollapsed && !dragCategory && items.length > 0 ? (
-                            <div className="grid gap-x-6 gap-y-2 lg:grid-cols-2">
-                              {items.map((expense, expenseIndex) => (
-                                <div key={expense.id} className="grid grid-cols-[1fr_9rem_auto] items-center gap-2">
-                                  <TextField
-                                    id={`expense-name-${expense.id}`}
-                                    className={field}
-                                    value={expense.name}
-                                    placeholder="New expense"
-                                    onChange={(next) =>
-                                      patch((draft) => ({
-                                        ...draft,
-                                        expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, name: next } : e)),
-                                      }))
-                                    }
-                                  />
-                                  <CurrencyField
-                                    className={field}
-                                    value={expense.amount}
-                                    onChange={(next) =>
-                                      patch((draft) => ({
-                                        ...draft,
-                                        expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, amount: next } : e)),
-                                      }))
-                                    }
-                                    onTabOut={expenseIndex === items.length - 1 ? () => addExpenseAndFocus(category) : undefined}
-                                  />
-                                  <button
-                                    type="button"
-                                    className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                                    aria-label="Remove expense"
-                                    onClick={() =>
-                                      patch((draft) => ({ ...draft, expenses: draft.expenses.filter((e) => e.id !== expense.id) }))
-                                    }
-                                  >
-                                    <TrashIcon />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
+                            <Locked locked={readOnly}>
+                              <div className="grid gap-x-6 gap-y-2 lg:grid-cols-2">
+                                {items.map((expense, expenseIndex) => (
+                                  <div key={expense.id} className="grid grid-cols-[1fr_9rem_auto] items-center gap-2">
+                                    <TextField
+                                      id={`expense-name-${expense.id}`}
+                                      className={field}
+                                      value={expense.name}
+                                      placeholder="New expense"
+                                      onChange={(next) =>
+                                        patch((draft) => ({
+                                          ...draft,
+                                          expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, name: next } : e)),
+                                        }))
+                                      }
+                                    />
+                                    <CurrencyField
+                                      className={field}
+                                      value={expense.amount}
+                                      onChange={(next) =>
+                                        patch((draft) => ({
+                                          ...draft,
+                                          expenses: draft.expenses.map((e) => (e.id === expense.id ? { ...e, amount: next } : e)),
+                                        }))
+                                      }
+                                      onTabOut={expenseIndex === items.length - 1 ? () => addExpenseAndFocus(category) : undefined}
+                                    />
+                                    {readOnly ? null : (
+                                      <button
+                                        type="button"
+                                        className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                        aria-label="Remove expense"
+                                        onClick={() =>
+                                          patch((draft) => ({ ...draft, expenses: draft.expenses.filter((e) => e.id !== expense.id) }))
+                                        }
+                                      >
+                                        <TrashIcon />
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </Locked>
                           ) : null}
-                          {!catCollapsed && !dragCategory && (
+                          {!readOnly && !catCollapsed && !dragCategory && (
                             <button type="button" className={`${pillButton} self-start`} onClick={() => addExpenseAndFocus(category)}>
                               Add expense
                             </button>
@@ -1597,14 +1642,16 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                         </div>
                       );
                     })}
-                    <InlineAdd
-                      placeholder="Add category"
-                      onAdd={(value) =>
-                        patch((draft) =>
-                          draft.categories.includes(value) ? draft : { ...draft, categories: [...draft.categories, value] },
-                        )
-                      }
-                    />
+                    {readOnly ? null : (
+                      <InlineAdd
+                        placeholder="Add category"
+                        onAdd={(value) =>
+                          patch((draft) =>
+                            draft.categories.includes(value) ? draft : { ...draft, categories: [...draft.categories, value] },
+                          )
+                        }
+                      />
+                    )}
                     <div className="mt-2 flex items-center justify-between border-t border-[#eadccb] pt-3 text-sm font-semibold text-[#181716]">
                       <span>Total expenses</span>
                       <span>{formatCurrency(budget.expenses.reduce((sum, expense) => sum + expense.amount, 0))}/yr</span>
@@ -1627,35 +1674,39 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                   <span className="text-sm font-normal text-[#9a8a7b]">({budget.policies.length})</span>
                 </button>
                 <div className="flex flex-wrap items-center gap-2">
-                  {budget.policies.length > 1 ? (
-                    <button
-                      type="button"
-                      className={pillButton}
-                      onClick={() => patch((draft) => ({ ...draft, policies: sortPoliciesByAssigned(draft.policies, draft.expenses) }))}
-                    >
-                      Sort by assigned
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className={pillButton}
-                    onClick={() =>
-                      patch((draft) => ({
-                        ...draft,
-                        policies: [
-                          {
-                            id: makeId("policy"),
-                            name: "New policy",
-                            note: "",
-                            rules: [{ unitTypes: [], tags: [], weight: 100, method: "common_interest" }],
-                          },
-                          ...draft.policies,
-                        ],
-                      }))
-                    }
-                  >
-                    Add policy
-                  </button>
+                  {readOnly ? null : (
+                    <>
+                      {budget.policies.length > 1 ? (
+                        <button
+                          type="button"
+                          className={pillButton}
+                          onClick={() => patch((draft) => ({ ...draft, policies: sortPoliciesByAssigned(draft.policies, draft.expenses) }))}
+                        >
+                          Sort by assigned
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className={pillButton}
+                        onClick={() =>
+                          patch((draft) => ({
+                            ...draft,
+                            policies: [
+                              {
+                                id: makeId("policy"),
+                                name: "New policy",
+                                note: "",
+                                rules: [{ unitTypes: [], tags: [], weight: 100, method: "common_interest" }],
+                              },
+                              ...draft.policies,
+                            ],
+                          }))
+                        }
+                      >
+                        Add policy
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
               {collapsedPolicies ? null : (
@@ -1688,32 +1739,36 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
-                              {/* biome-ignore lint/a11y/noStaticElementInteractions: drag handle */}
-                              <span
-                                draggable
-                                onDragStart={(event) => {
-                                  setDragPolicy(policy.id);
-                                  const card = (event.currentTarget as HTMLElement).closest("[data-policy]");
-                                  if (card) {
-                                    event.dataTransfer.setDragImage(card, 20, 16);
+                              {readOnly ? null : (
+                                // biome-ignore lint/a11y/noStaticElementInteractions: drag handle
+                                <span
+                                  draggable
+                                  onDragStart={(event) => {
+                                    setDragPolicy(policy.id);
+                                    const card = (event.currentTarget as HTMLElement).closest("[data-policy]");
+                                    if (card) {
+                                      event.dataTransfer.setDragImage(card, 20, 16);
+                                    }
+                                  }}
+                                  onDragEnd={() => setDragPolicy(null)}
+                                  className="cursor-grab select-none text-[#b3a392]"
+                                  title="Drag to reorder policy"
+                                >
+                                  ☰
+                                </span>
+                              )}
+                              <Locked locked={readOnly}>
+                                <TextField
+                                  className={`${fieldBase} w-96 max-w-full`}
+                                  value={policy.name}
+                                  onChange={(next) =>
+                                    patch((draft) => ({
+                                      ...draft,
+                                      policies: draft.policies.map((p) => (p.id === policy.id ? { ...p, name: next } : p)),
+                                    }))
                                   }
-                                }}
-                                onDragEnd={() => setDragPolicy(null)}
-                                className="cursor-grab select-none text-[#b3a392]"
-                                title="Drag to reorder policy"
-                              >
-                                ☰
-                              </span>
-                              <TextField
-                                className={`${fieldBase} w-96 max-w-full`}
-                                value={policy.name}
-                                onChange={(next) =>
-                                  patch((draft) => ({
-                                    ...draft,
-                                    policies: draft.policies.map((p) => (p.id === policy.id ? { ...p, name: next } : p)),
-                                  }))
-                                }
-                              />
+                                />
+                              </Locked>
                             </div>
                             <div className="flex items-center gap-3">
                               <span
@@ -1723,27 +1778,33 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                               >
                                 total: {weightSum}%
                               </span>
-                              <button
-                                type="button"
-                                className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                                aria-label="Remove policy"
-                                onClick={() => patch((draft) => ({ ...draft, policies: draft.policies.filter((p) => p.id !== policy.id) }))}
-                              >
-                                <TrashIcon />
-                              </button>
+                              {readOnly ? null : (
+                                <button
+                                  type="button"
+                                  className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                  aria-label="Remove policy"
+                                  onClick={() =>
+                                    patch((draft) => ({ ...draft, policies: draft.policies.filter((p) => p.id !== policy.id) }))
+                                  }
+                                >
+                                  <TrashIcon />
+                                </button>
+                              )}
                             </div>
                           </div>
-                          <TextField
-                            className={`${field} mt-2`}
-                            value={policy.note ?? ""}
-                            placeholder="Note (optional)"
-                            onChange={(next) =>
-                              patch((draft) => ({
-                                ...draft,
-                                policies: draft.policies.map((p) => (p.id === policy.id ? { ...p, note: next } : p)),
-                              }))
-                            }
-                          />
+                          <Locked locked={readOnly}>
+                            <TextField
+                              className={`${field} mt-2`}
+                              value={policy.note ?? ""}
+                              placeholder="Note (optional)"
+                              onChange={(next) =>
+                                patch((draft) => ({
+                                  ...draft,
+                                  policies: draft.policies.map((p) => (p.id === policy.id ? { ...p, note: next } : p)),
+                                }))
+                              }
+                            />
+                          </Locked>
                           {(() => {
                             const used = budget.expenses.filter((e) => e.policyId === policy.id);
                             const editing = editingPolicyExpenses === policy.id;
@@ -1752,7 +1813,7 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                               <div className="mt-2 text-xs text-[#5b5148]">
                                 <div className="flex items-center gap-2">
                                   <p>{used.length > 0 || editing ? "Used by:" : "Not used by any expense."}</p>
-                                  {budget.expenses.length > 0 ? (
+                                  {!readOnly && budget.expenses.length > 0 ? (
                                     <button
                                       type="button"
                                       className="font-semibold text-[#1d1b18] underline"
@@ -1833,137 +1894,139 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                                 }}
                               >
                                 <div className="flex flex-wrap items-center justify-between gap-3">
-                                  <div className="flex flex-wrap items-center gap-3">
-                                    {policy.rules.length > 1 ? (
-                                      // biome-ignore lint/a11y/noStaticElementInteractions: drag handle
-                                      <span
-                                        draggable
-                                        onDragStart={(event) => {
-                                          event.stopPropagation();
-                                          setDragRule({ policyId: policy.id, index: ruleIndex });
-                                          const row = (event.currentTarget as HTMLElement).closest("[data-rule]");
-                                          if (row) {
-                                            event.dataTransfer.setDragImage(row, 20, 16);
+                                  <Locked locked={readOnly}>
+                                    <div className="flex flex-wrap items-center gap-3">
+                                      {!readOnly && policy.rules.length > 1 ? (
+                                        // biome-ignore lint/a11y/noStaticElementInteractions: drag handle
+                                        <span
+                                          draggable
+                                          onDragStart={(event) => {
+                                            event.stopPropagation();
+                                            setDragRule({ policyId: policy.id, index: ruleIndex });
+                                            const row = (event.currentTarget as HTMLElement).closest("[data-rule]");
+                                            if (row) {
+                                              event.dataTransfer.setDragImage(row, 20, 16);
+                                            }
+                                          }}
+                                          onDragEnd={() => setDragRule(null)}
+                                          className="cursor-grab select-none text-[#b3a392]"
+                                          title="Drag to reorder rule"
+                                        >
+                                          ☰
+                                        </span>
+                                      ) : null}
+                                      <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-[#4a4037]">
+                                        %
+                                        <PercentField
+                                          className={`${fieldBase} w-16`}
+                                          value={rule.weight}
+                                          onChange={(next) =>
+                                            patch((draft) => ({
+                                              ...draft,
+                                              policies: draft.policies.map((p) =>
+                                                p.id === policy.id
+                                                  ? { ...p, rules: p.rules.map((r, i) => (i === ruleIndex ? { ...r, weight: next } : r)) }
+                                                  : p,
+                                              ),
+                                            }))
                                           }
-                                        }}
-                                        onDragEnd={() => setDragRule(null)}
-                                        className="cursor-grab select-none text-[#b3a392]"
-                                        title="Drag to reorder rule"
-                                      >
-                                        ☰
+                                        />
                                       </span>
-                                    ) : null}
-                                    <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-[#4a4037]">
-                                      %
-                                      <PercentField
-                                        className={`${fieldBase} w-16`}
-                                        value={rule.weight}
-                                        onChange={(next) =>
+                                      <select
+                                        className={`${fieldBase} w-48`}
+                                        value={rule.method}
+                                        onChange={(event) =>
                                           patch((draft) => ({
                                             ...draft,
                                             policies: draft.policies.map((p) =>
                                               p.id === policy.id
-                                                ? { ...p, rules: p.rules.map((r, i) => (i === ruleIndex ? { ...r, weight: next } : r)) }
+                                                ? {
+                                                    ...p,
+                                                    rules: p.rules.map((r, i) =>
+                                                      i === ruleIndex
+                                                        ? { ...r, method: event.target.value as (typeof ALLOCATION_METHODS)[number] }
+                                                        : r,
+                                                    ),
+                                                  }
                                                 : p,
                                             ),
                                           }))
                                         }
-                                      />
-                                    </span>
-                                    <select
-                                      className={`${fieldBase} w-48`}
-                                      value={rule.method}
-                                      onChange={(event) =>
-                                        patch((draft) => ({
-                                          ...draft,
-                                          policies: draft.policies.map((p) =>
-                                            p.id === policy.id
-                                              ? {
-                                                  ...p,
-                                                  rules: p.rules.map((r, i) =>
-                                                    i === ruleIndex
-                                                      ? { ...r, method: event.target.value as (typeof ALLOCATION_METHODS)[number] }
-                                                      : r,
-                                                  ),
-                                                }
-                                              : p,
-                                          ),
-                                        }))
-                                      }
-                                    >
-                                      {ALLOCATION_METHODS.map((method) => (
-                                        <option key={method} value={method}>
-                                          {ALLOCATION_METHOD_LABELS[method]}
-                                        </option>
+                                      >
+                                        {ALLOCATION_METHODS.map((method) => (
+                                          <option key={method} value={method}>
+                                            {ALLOCATION_METHOD_LABELS[method]}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      {budget.unitTypes.map((type) => (
+                                        <label key={type.name} className="flex items-center gap-1 text-xs text-[#5b5148]">
+                                          <input
+                                            type="checkbox"
+                                            checked={rule.unitTypes.includes(type.name)}
+                                            onChange={(event) =>
+                                              patch((draft) => ({
+                                                ...draft,
+                                                policies: draft.policies.map((p) =>
+                                                  p.id === policy.id
+                                                    ? {
+                                                        ...p,
+                                                        rules: p.rules.map((r, i) =>
+                                                          i === ruleIndex
+                                                            ? {
+                                                                ...r,
+                                                                unitTypes: event.target.checked
+                                                                  ? [...r.unitTypes, type.name]
+                                                                  : r.unitTypes.filter((item) => item !== type.name),
+                                                              }
+                                                            : r,
+                                                        ),
+                                                      }
+                                                    : p,
+                                                ),
+                                              }))
+                                            }
+                                          />
+                                          {type.name}
+                                        </label>
                                       ))}
-                                    </select>
-                                    {budget.unitTypes.map((type) => (
-                                      <label key={type.name} className="flex items-center gap-1 text-xs text-[#5b5148]">
-                                        <input
-                                          type="checkbox"
-                                          checked={rule.unitTypes.includes(type.name)}
-                                          onChange={(event) =>
-                                            patch((draft) => ({
-                                              ...draft,
-                                              policies: draft.policies.map((p) =>
-                                                p.id === policy.id
-                                                  ? {
-                                                      ...p,
-                                                      rules: p.rules.map((r, i) =>
-                                                        i === ruleIndex
-                                                          ? {
-                                                              ...r,
-                                                              unitTypes: event.target.checked
-                                                                ? [...r.unitTypes, type.name]
-                                                                : r.unitTypes.filter((item) => item !== type.name),
-                                                            }
-                                                          : r,
-                                                      ),
-                                                    }
-                                                  : p,
-                                              ),
-                                            }))
-                                          }
-                                        />
-                                        {type.name}
-                                      </label>
-                                    ))}
-                                    {rule.unitTypes.length === 0 ? (
-                                      <span className="text-xs italic text-[#b44b43]">select unit types</span>
-                                    ) : null}
-                                    {[...new Set([...allTags, ...rule.tags])].map((tag) => (
-                                      <label key={tag} className="flex items-center gap-1 text-xs text-[#5b5148]">
-                                        <input
-                                          type="checkbox"
-                                          checked={rule.tags.includes(tag)}
-                                          onChange={(event) =>
-                                            patch((draft) => ({
-                                              ...draft,
-                                              policies: draft.policies.map((p) =>
-                                                p.id === policy.id
-                                                  ? {
-                                                      ...p,
-                                                      rules: p.rules.map((r, i) =>
-                                                        i === ruleIndex
-                                                          ? {
-                                                              ...r,
-                                                              tags: event.target.checked
-                                                                ? [...r.tags, tag]
-                                                                : r.tags.filter((item) => item !== tag),
-                                                            }
-                                                          : r,
-                                                      ),
-                                                    }
-                                                  : p,
-                                              ),
-                                            }))
-                                          }
-                                        />
-                                        <span className="rounded-full border border-[#e6d7c7] bg-white px-1.5">#{tag}</span>
-                                      </label>
-                                    ))}
-                                  </div>
-                                  {policy.rules.length > 1 ? (
+                                      {rule.unitTypes.length === 0 ? (
+                                        <span className="text-xs italic text-[#b44b43]">select unit types</span>
+                                      ) : null}
+                                      {[...new Set([...allTags, ...rule.tags])].map((tag) => (
+                                        <label key={tag} className="flex items-center gap-1 text-xs text-[#5b5148]">
+                                          <input
+                                            type="checkbox"
+                                            checked={rule.tags.includes(tag)}
+                                            onChange={(event) =>
+                                              patch((draft) => ({
+                                                ...draft,
+                                                policies: draft.policies.map((p) =>
+                                                  p.id === policy.id
+                                                    ? {
+                                                        ...p,
+                                                        rules: p.rules.map((r, i) =>
+                                                          i === ruleIndex
+                                                            ? {
+                                                                ...r,
+                                                                tags: event.target.checked
+                                                                  ? [...r.tags, tag]
+                                                                  : r.tags.filter((item) => item !== tag),
+                                                              }
+                                                            : r,
+                                                        ),
+                                                      }
+                                                    : p,
+                                                ),
+                                              }))
+                                            }
+                                          />
+                                          <span className="rounded-full border border-[#e6d7c7] bg-white px-1.5">#{tag}</span>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </Locked>
+                                  {!readOnly && policy.rules.length > 1 ? (
                                     <button
                                       type="button"
                                       className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
@@ -1983,22 +2046,24 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                                 </div>
                               </div>
                             ))}
-                            <button
-                              type="button"
-                              className={`${pillButton} self-start`}
-                              onClick={() =>
-                                patch((draft) => ({
-                                  ...draft,
-                                  policies: draft.policies.map((p) =>
-                                    p.id === policy.id
-                                      ? { ...p, rules: [...p.rules, { unitTypes: [], tags: [], weight: 0, method: "common_interest" }] }
-                                      : p,
-                                  ),
-                                }))
-                              }
-                            >
-                              Add rule
-                            </button>
+                            {readOnly ? null : (
+                              <button
+                                type="button"
+                                className={`${pillButton} self-start`}
+                                onClick={() =>
+                                  patch((draft) => ({
+                                    ...draft,
+                                    policies: draft.policies.map((p) =>
+                                      p.id === policy.id
+                                        ? { ...p, rules: [...p.rules, { unitTypes: [], tags: [], weight: 0, method: "common_interest" }] }
+                                        : p,
+                                    ),
+                                  }))
+                                }
+                              >
+                                Add rule
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
@@ -2015,175 +2080,189 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
                 Inflation scales the entered expense amounts. Reserve is added on top for savings. Offsets adjust every unit of a type (e.g.
                 -5% to Commercial). Other income (e.g. laundry) is subtracted from the total, spread by each unit's share.
               </p>
-              <div className="mt-4 flex flex-wrap gap-6">
-                <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
-                  Inflation %
-                  <PercentField
-                    className={`${fieldBase} w-28`}
-                    value={budget.adjustments.inflationPct}
-                    onChange={(next) => patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, inflationPct: next } }))}
-                  />
-                </span>
-                <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
-                  Reserve %
-                  <PercentField
-                    className={`${fieldBase} w-28`}
-                    value={budget.adjustments.reservePct}
-                    onChange={(next) => patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, reservePct: next } }))}
-                  />
-                </span>
-              </div>
+              <Locked locked={readOnly}>
+                <div className="mt-4 flex flex-wrap gap-6">
+                  <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
+                    Inflation %
+                    <PercentField
+                      className={`${fieldBase} w-28`}
+                      value={budget.adjustments.inflationPct}
+                      onChange={(next) => patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, inflationPct: next } }))}
+                    />
+                  </span>
+                  <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
+                    Reserve %
+                    <PercentField
+                      className={`${fieldBase} w-28`}
+                      value={budget.adjustments.reservePct}
+                      onChange={(next) => patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, reservePct: next } }))}
+                    />
+                  </span>
+                </div>
+              </Locked>
 
               <div className="mt-5 flex items-center justify-between gap-3">
                 <span className={groupHeading}>Other income</span>
-                <button
-                  type="button"
-                  className={pillButton}
-                  onClick={() =>
-                    patch((draft) => ({
-                      ...draft,
-                      adjustments: {
-                        ...draft.adjustments,
-                        incomes: [...(draft.adjustments.incomes ?? []), { id: makeId("income"), name: "", amount: 0 }],
-                      },
-                    }))
-                  }
-                >
-                  Add income
-                </button>
+                {readOnly ? null : (
+                  <button
+                    type="button"
+                    className={pillButton}
+                    onClick={() =>
+                      patch((draft) => ({
+                        ...draft,
+                        adjustments: {
+                          ...draft.adjustments,
+                          incomes: [...(draft.adjustments.incomes ?? []), { id: makeId("income"), name: "", amount: 0 }],
+                        },
+                      }))
+                    }
+                  >
+                    Add income
+                  </button>
+                )}
               </div>
               {(budget.adjustments.incomes ?? []).length > 0 ? (
-                <div className="mt-2 grid gap-x-6 gap-y-2 lg:grid-cols-2">
-                  {(budget.adjustments.incomes ?? []).map((income) => (
-                    <div key={income.id} className="grid grid-cols-[1fr_9rem_auto] items-center gap-2">
-                      <TextField
-                        className={field}
-                        value={income.name}
-                        placeholder="New income"
-                        onChange={(next) =>
-                          patch((draft) => ({
-                            ...draft,
-                            adjustments: {
-                              ...draft.adjustments,
-                              incomes: (draft.adjustments.incomes ?? []).map((x) => (x.id === income.id ? { ...x, name: next } : x)),
-                            },
-                          }))
-                        }
-                      />
-                      <CurrencyField
-                        className={field}
-                        value={income.amount}
-                        onChange={(next) =>
-                          patch((draft) => ({
-                            ...draft,
-                            adjustments: {
-                              ...draft.adjustments,
-                              incomes: (draft.adjustments.incomes ?? []).map((x) => (x.id === income.id ? { ...x, amount: next } : x)),
-                            },
-                          }))
-                        }
-                      />
-                      <button
-                        type="button"
-                        className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                        aria-label="Remove income"
-                        onClick={() =>
-                          patch((draft) => ({
-                            ...draft,
-                            adjustments: {
-                              ...draft.adjustments,
-                              incomes: (draft.adjustments.incomes ?? []).filter((x) => x.id !== income.id),
-                            },
-                          }))
-                        }
-                      >
-                        <TrashIcon />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                <Locked locked={readOnly}>
+                  <div className="mt-2 grid gap-x-6 gap-y-2 lg:grid-cols-2">
+                    {(budget.adjustments.incomes ?? []).map((income) => (
+                      <div key={income.id} className="grid grid-cols-[1fr_9rem_auto] items-center gap-2">
+                        <TextField
+                          className={field}
+                          value={income.name}
+                          placeholder="New income"
+                          onChange={(next) =>
+                            patch((draft) => ({
+                              ...draft,
+                              adjustments: {
+                                ...draft.adjustments,
+                                incomes: (draft.adjustments.incomes ?? []).map((x) => (x.id === income.id ? { ...x, name: next } : x)),
+                              },
+                            }))
+                          }
+                        />
+                        <CurrencyField
+                          className={field}
+                          value={income.amount}
+                          onChange={(next) =>
+                            patch((draft) => ({
+                              ...draft,
+                              adjustments: {
+                                ...draft.adjustments,
+                                incomes: (draft.adjustments.incomes ?? []).map((x) => (x.id === income.id ? { ...x, amount: next } : x)),
+                              },
+                            }))
+                          }
+                        />
+                        {readOnly ? null : (
+                          <button
+                            type="button"
+                            className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                            aria-label="Remove income"
+                            onClick={() =>
+                              patch((draft) => ({
+                                ...draft,
+                                adjustments: {
+                                  ...draft.adjustments,
+                                  incomes: (draft.adjustments.incomes ?? []).filter((x) => x.id !== income.id),
+                                },
+                              }))
+                            }
+                          >
+                            <TrashIcon />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Locked>
               ) : null}
 
               <div className="mt-5 flex items-center justify-between gap-3">
                 <span className={groupHeading}>Unit-type offsets</span>
-                <button
-                  type="button"
-                  className={pillButton}
-                  onClick={() =>
-                    patch((draft) => ({
-                      ...draft,
-                      adjustments: {
-                        ...draft.adjustments,
-                        offsets: [...(draft.adjustments.offsets ?? []), { unitType: draft.unitTypes[0]?.name ?? "", pct: 0 }],
-                      },
-                    }))
-                  }
-                >
-                  Add offset
-                </button>
+                {readOnly ? null : (
+                  <button
+                    type="button"
+                    className={pillButton}
+                    onClick={() =>
+                      patch((draft) => ({
+                        ...draft,
+                        adjustments: {
+                          ...draft.adjustments,
+                          offsets: [...(draft.adjustments.offsets ?? []), { unitType: draft.unitTypes[0]?.name ?? "", pct: 0 }],
+                        },
+                      }))
+                    }
+                  >
+                    Add offset
+                  </button>
+                )}
               </div>
-              <div className="mt-2 flex flex-col gap-2">
-                {(budget.adjustments.offsets ?? []).map((offset, offsetIndex) => (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: offsets are positional and have no stable id
-                  <div key={`offset-${offsetIndex}`} className="flex flex-wrap items-center gap-2">
-                    <select
-                      className={`${field} max-w-xs`}
-                      value={offset.unitType}
-                      onChange={(event) =>
-                        patch((draft) => ({
-                          ...draft,
-                          adjustments: {
-                            ...draft.adjustments,
-                            offsets: (draft.adjustments.offsets ?? []).map((o, i) =>
-                              i === offsetIndex ? { ...o, unitType: event.target.value } : o,
-                            ),
-                          },
-                        }))
-                      }
-                    >
-                      {budget.unitTypes.map((type) => (
-                        <option key={type.name} value={type.name}>
-                          {type.name}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
-                      offset %{/* The slider snaps to 10% steps; the number field accepts any percent. */}
-                      <input
-                        type="range"
-                        min={-100}
-                        max={100}
-                        step={10}
-                        aria-label="Offset percent"
-                        className="w-40 accent-[#1b1a17]"
-                        value={Math.max(-100, Math.min(100, offset.pct))}
-                        onChange={(event) => setOffsetPct(offsetIndex, Number(event.target.value))}
-                      />
-                      <NumberField
-                        className={`${fieldBase} w-24`}
-                        value={offset.pct}
-                        onChange={(next) => setOffsetPct(offsetIndex, next)}
-                      />
-                    </span>
-                    <button
-                      type="button"
-                      className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
-                      aria-label="Remove offset"
-                      onClick={() =>
-                        patch((draft) => ({
-                          ...draft,
-                          adjustments: {
-                            ...draft.adjustments,
-                            offsets: (draft.adjustments.offsets ?? []).filter((_, i) => i !== offsetIndex),
-                          },
-                        }))
-                      }
-                    >
-                      <TrashIcon />
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <Locked locked={readOnly}>
+                <div className="mt-2 flex flex-col gap-2">
+                  {(budget.adjustments.offsets ?? []).map((offset, offsetIndex) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: offsets are positional and have no stable id
+                    <div key={`offset-${offsetIndex}`} className="flex flex-wrap items-center gap-2">
+                      <select
+                        className={`${field} max-w-xs`}
+                        value={offset.unitType}
+                        onChange={(event) =>
+                          patch((draft) => ({
+                            ...draft,
+                            adjustments: {
+                              ...draft.adjustments,
+                              offsets: (draft.adjustments.offsets ?? []).map((o, i) =>
+                                i === offsetIndex ? { ...o, unitType: event.target.value } : o,
+                              ),
+                            },
+                          }))
+                        }
+                      >
+                        {budget.unitTypes.map((type) => (
+                          <option key={type.name} value={type.name}>
+                            {type.name}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
+                        offset %{/* The slider snaps to 10% steps; the number field accepts any percent. */}
+                        <input
+                          type="range"
+                          min={-100}
+                          max={100}
+                          step={10}
+                          aria-label="Offset percent"
+                          className="w-40 accent-[#1b1a17]"
+                          value={Math.max(-100, Math.min(100, offset.pct))}
+                          onChange={(event) => setOffsetPct(offsetIndex, Number(event.target.value))}
+                        />
+                        <NumberField
+                          className={`${fieldBase} w-24`}
+                          value={offset.pct}
+                          onChange={(next) => setOffsetPct(offsetIndex, next)}
+                        />
+                      </span>
+                      {readOnly ? null : (
+                        <button
+                          type="button"
+                          className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                          aria-label="Remove offset"
+                          onClick={() =>
+                            patch((draft) => ({
+                              ...draft,
+                              adjustments: {
+                                ...draft.adjustments,
+                                offsets: (draft.adjustments.offsets ?? []).filter((_, i) => i !== offsetIndex),
+                              },
+                            }))
+                          }
+                        >
+                          <TrashIcon />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Locked>
             </section>
           </>
         ) : null}
@@ -2463,6 +2542,17 @@ export function Calculator({ initialBudget, onBudgetChange, intro, actions }: Ca
         />
       ) : null}
     </div>
+  );
+}
+
+// Disables the fields inside when locked. Unlocked, it adds no element, so the editable page stays as it was.
+function Locked({ locked, children }: { locked: boolean; children: ReactNode }) {
+  return locked ? (
+    <fieldset disabled className="contents">
+      {children}
+    </fieldset>
+  ) : (
+    children
   );
 }
 

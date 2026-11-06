@@ -1,25 +1,32 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_BUDGET, EMPTY_BUDGET } from "../lib/budget";
+import { diffBudgets } from "../lib/diff";
 import { accessBudget, accessDraft, adminOfBuilding, adminOfProject, authorOfDraft } from "../lib/server/access";
 import * as tables from "../lib/server/schema";
 import {
   createBudget,
   createBuilding,
   createDraft,
+  createDraftFromVersion,
   createProject,
   deleteDraft,
   FIRST_DRAFT_NAME,
   getBudget,
   getBuilding,
+  getChangelog,
   getDraft,
+  getVersion,
   listBuildings,
   parseName,
+  parseNote,
+  parseVersionNumber,
+  publishDraft,
   saveDraft,
 } from "../lib/server/store";
 import type { BudgetAccess, BuildingAdmin, DraftAccess, DraftAuthor, ProjectAdmin } from "../lib/server/access";
@@ -34,6 +41,10 @@ let db: Db;
 beforeEach(async () => {
   const pglite = drizzle(new PGlite());
   await migrate(pglite, { migrationsFolder: "drizzle" });
+  // Neon Auth creates this table, outside the migrations.
+  await pglite.execute(sql`create schema neon_auth`);
+  await pglite.execute(sql`create table neon_auth."user" (id uuid primary key, email text not null)`);
+  await pglite.execute(sql`insert into neon_auth."user" values (${ADMIN}, 'admin@example.com')`);
   db = pglite as unknown as Db;
 });
 
@@ -57,6 +68,30 @@ describe("parseName", () => {
     { name: "a missing field", value: null, want: null },
   ])("parses $name", ({ value, want }) => {
     expect(parseName(value)).toBe(want);
+  });
+});
+
+describe("parseNote", () => {
+  it.each([
+    { name: "a trimmed note", value: " Board approved ", want: "Board approved" },
+    { name: "a blank note", value: "  ", want: "" },
+    { name: "a missing field", value: null, want: "" },
+    { name: "a note that is too long", value: "x".repeat(2001), want: null },
+  ])("parses $name", ({ value, want }) => {
+    expect(parseNote(value)).toBe(want);
+  });
+});
+
+describe("parseVersionNumber", () => {
+  it.each([
+    { name: "a version number", value: "12", want: 12 },
+    { name: "zero", value: "0", want: null },
+    { name: "a leading zero", value: "01", want: null },
+    { name: "a number too big for Postgres", value: "9999999999", want: null },
+    { name: "text", value: "latest", want: null },
+    { name: "a missing field", value: null, want: null },
+  ])("parses $name", ({ value, want }) => {
+    expect(parseVersionNumber(value)).toBe(want);
   });
 });
 
@@ -143,7 +178,7 @@ describe("budgets", () => {
       project: { id: projectId, name: "FY2027" },
       drafts: [{ id: draftId, name: FIRST_DRAFT_NAME }],
     });
-    expect(await getDraft(db, author)).toEqual({ name: FIRST_DRAFT_NAME, revision: 0, content: EMPTY_BUDGET });
+    expect(await getDraft(db, author)).toEqual({ name: FIRST_DRAFT_NAME, baseVersion: 0, revision: 0, content: EMPTY_BUDGET });
     expect(await getBudget(db, draft)).toEqual(await getBudget(db, budget));
   });
 
@@ -182,6 +217,7 @@ describe("drafts", () => {
     const saved = (await accessDraft(db, ADMIN, budgetId, savedId)) as DraftAccess;
     expect(await getDraft(db, authorOfDraft(saved) as DraftAuthor)).toEqual({
       name: "From the calculator",
+      baseVersion: 0,
       revision: 0,
       content: DEFAULT_BUDGET,
     });
@@ -209,20 +245,129 @@ describe("drafts", () => {
   });
 });
 
+// Publishing runs in a transaction, which PGlite supports like the WebSocket driver does.
+const publish = (draft: DraftAccess, revision = 0, confirmedLatest = 0, note = "") =>
+  publishDraft(db, draft, { revision, note, confirmedLatest });
+
+describe("versions", () => {
+  it("publishes a draft as version 1 and removes the draft", async () => {
+    const { budget, draft, author } = await seed();
+    await saveDraft(db, author, 0, DEFAULT_BUDGET);
+    expect(await publish(draft, 1, 0, "Board approved")).toEqual({ status: "published", number: 1 });
+    expect(await getBudget(db, budget)).toMatchObject({ latestVersion: 1, drafts: [] });
+    expect(await getVersion(db, budget, 1)).toEqual({
+      number: 1,
+      basedOn: 0,
+      note: "Board approved",
+      publishedBy: "admin@example.com",
+      publishedAt: expect.any(Date),
+      content: DEFAULT_BUDGET,
+    });
+  });
+
+  it("numbers versions in order and records the version each draft started from", async () => {
+    const { budget, draft } = await seed();
+    await publish(draft);
+    const restoreId = (await createDraftFromVersion(db, budget, "Restore", 1)) as string;
+    const restore = (await accessDraft(db, ADMIN, budget.budgetId, restoreId)) as DraftAccess;
+    expect((await getBudget(db, budget)).drafts).toMatchObject([{ id: restoreId, baseVersion: 1, revision: 0 }]);
+    expect(await publish(restore)).toEqual({ status: "published", number: 2 });
+    expect(await getVersion(db, budget, 2)).toMatchObject({ number: 2, basedOn: 1, content: EMPTY_BUDGET });
+  });
+
+  it("asks to review the latest version when another publish came first", async () => {
+    const { budget, draft, author } = await seed();
+    const otherId = await createDraft(db, budget, "Other", EMPTY_BUDGET);
+    await saveDraft(db, author, 0, DEFAULT_BUDGET);
+    expect(await publish(draft, 1)).toEqual({ status: "published", number: 1 });
+    const other = (await accessDraft(db, ADMIN, budget.budgetId, otherId)) as DraftAccess;
+    expect(await publish(other)).toEqual({ status: "behind", latest: 1, changes: diffBudgets(DEFAULT_BUDGET, EMPTY_BUDGET) });
+    expect(await publish(other, 0, 1)).toEqual({ status: "published", number: 2 });
+  });
+
+  it("refuses a publish that names an old revision", async () => {
+    const { budget, draft, author } = await seed();
+    await saveDraft(db, author, 0, DEFAULT_BUDGET);
+    expect(await publish(draft, 0)).toEqual({ status: "stale" });
+    expect((await getBudget(db, budget)).latestVersion).toBe(0);
+  });
+
+  it("reports a draft deleted after the access check", async () => {
+    const { draft } = await seed();
+    await deleteDraft(db, draft);
+    expect(await publish(draft)).toEqual({ status: "missing" });
+  });
+
+  it("refuses a second version with the same number", async () => {
+    const { budgetId, draft } = await seed();
+    await publish(draft);
+    const duplicate = { budgetId, number: 1, basedOn: 0, content: EMPTY_BUDGET, publishedBy: ADMIN };
+    await expect(db.insert(tables.budgetVersion).values(duplicate)).rejects.toThrow();
+  });
+
+  it("finds no version that was not published, or that belongs to another budget", async () => {
+    const { project, budget, draft } = await seed();
+    await publish(draft);
+    const { budgetId: otherId } = await createBudget(db, project, "New roof", null);
+    const other = (await accessBudget(db, ADMIN, otherId)) as BudgetAccess;
+    expect(await getVersion(db, budget, 2)).toBeNull();
+    expect(await getVersion(db, other, 1)).toBeNull();
+    expect(await createDraftFromVersion(db, other, "Restore", 1)).toBeNull();
+  });
+
+  it("shows no publisher for an account that no longer exists", async () => {
+    const { budget, draft } = await seed();
+    await publish(draft);
+    await db.execute(sql`delete from neon_auth."user"`);
+    expect(await getVersion(db, budget, 1)).toMatchObject({ publishedBy: null });
+  });
+
+  it("lists the changelog newest first, each version against the one before", async () => {
+    const { budget, draft } = await seed();
+    await publish(draft, 0, 0, "First");
+    const secondId = await createDraft(db, budget, "Second", DEFAULT_BUDGET);
+    await publish((await accessDraft(db, ADMIN, budget.budgetId, secondId)) as DraftAccess, 0, 1, "Second");
+    expect(await getChangelog(db, budget)).toEqual([
+      expect.objectContaining({
+        number: 2,
+        note: "Second",
+        publishedBy: "admin@example.com",
+        changes: diffBudgets(EMPTY_BUDGET, DEFAULT_BUDGET),
+      }),
+      expect.objectContaining({ number: 1, note: "First", changes: null }),
+    ]);
+  });
+
+  it("copies the latest version into a new budget, ahead of newer drafts", async () => {
+    const { building, budget, draft } = await seed();
+    await publish(draft);
+    const restoreId = (await createDraftFromVersion(db, budget, "Restore", 1)) as string;
+    const restore = (await accessDraft(db, ADMIN, budget.budgetId, restoreId)) as DraftAccess;
+    await saveDraft(db, authorOfDraft(restore) as DraftAuthor, 0, DEFAULT_BUDGET);
+    const nextYear = (await adminOfProject(db, ADMIN, await createProject(db, building, "FY2028"))) as ProjectAdmin;
+    const { budgetId, draftId } = await createBudget(db, nextYear, "Base case", budget);
+    const copy = (await accessDraft(db, ADMIN, budgetId, draftId)) as DraftAccess;
+    expect(await getDraft(db, authorOfDraft(copy) as DraftAuthor)).toMatchObject({ baseVersion: 0, content: EMPTY_BUDGET });
+  });
+});
+
 describe("schema", () => {
   // Catches a schema change that was not followed by `npm run db:generate`.
-  it.each([tables.building, tables.project, tables.budget, tables.budgetDraft])("matches the generated migrations", async (table) => {
-    const migrations = readdirSync("drizzle")
-      .filter((file) => file.endsWith(".sql"))
-      .map((file) => readFileSync(`drizzle/${file}`, "utf8"))
-      .join("\n");
-    const { name, foreignKeys, indexes } = getTableConfig(table);
-    for (const key of foreignKeys) {
-      expect(migrations).toContain(`ADD CONSTRAINT "${key.getName()}"`);
-    }
-    for (const index of indexes) {
-      const columns = index.config.columns.map((column) => `"${(column as { name: string }).name}"`).join(", ");
-      expect(migrations).toContain(`ON "${name}" USING btree (${columns})`);
-    }
-  });
+  it.each([tables.building, tables.project, tables.budget, tables.budgetDraft, tables.budgetVersion])(
+    "matches the generated migrations",
+    async (table) => {
+      const migrations = readdirSync("drizzle")
+        .filter((file) => file.endsWith(".sql"))
+        .map((file) => readFileSync(`drizzle/${file}`, "utf8"))
+        .join("\n");
+      const { name, foreignKeys, indexes } = getTableConfig(table);
+      for (const key of foreignKeys) {
+        expect(migrations).toContain(`ADD CONSTRAINT "${key.getName()}"`);
+      }
+      for (const index of indexes) {
+        const columns = index.config.columns.map((column) => `"${(column as { name: string }).name}"`).join(", ");
+        expect(migrations).toContain(`ON "${name}" USING btree (${columns})`);
+      }
+    },
+  );
 });
