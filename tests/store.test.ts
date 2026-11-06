@@ -7,13 +7,25 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_BUDGET, EMPTY_BUDGET } from "../lib/budget";
 import { diffBudgets } from "../lib/diff";
-import { accessBudget, accessDraft, adminOfBuilding, adminOfProject, authorOfDraft } from "../lib/server/access";
+import {
+  accessBudget,
+  accessBuilding,
+  accessDraft,
+  adminOfBudget,
+  adminOfBuilding,
+  adminOfProject,
+  authorOfDraft,
+  editorOfBudget,
+  publisherOfDraft,
+} from "../lib/server/access";
 import * as tables from "../lib/server/schema";
 import {
+  acceptInvite,
   createBudget,
   createBuilding,
   createDraft,
   createDraftFromVersion,
+  createInvite,
   createProject,
   deleteDraft,
   FIRST_DRAFT_NAME,
@@ -23,17 +35,38 @@ import {
   getDraft,
   getVersion,
   listBuildings,
+  listDrafts,
+  listInvites,
+  listMembers,
   parseName,
   parseNote,
+  parseRole,
   parseVersionNumber,
+  peekInvite,
   publishDraft,
+  removeMember,
+  revokeInvite,
   saveDraft,
+  setMemberRole,
 } from "../lib/server/store";
-import type { BudgetAccess, BuildingAdmin, DraftAccess, DraftAuthor, ProjectAdmin } from "../lib/server/access";
+import type {
+  BudgetAccess,
+  BudgetAdmin,
+  BudgetEditor,
+  BuildingAccess,
+  BuildingAdmin,
+  DraftAccess,
+  DraftAuthor,
+  DraftPublisher,
+  ProjectAdmin,
+  Role,
+} from "../lib/server/access";
 import type { Db } from "../lib/server/login";
 
 const ADMIN = "00000000-0000-4000-8000-000000000001";
 const OTHER = "00000000-0000-4000-8000-000000000002";
+const EDITOR = "00000000-0000-4000-8000-000000000003";
+const VIEWER = "00000000-0000-4000-8000-000000000004";
 const MISSING = "00000000-0000-4000-8000-0000000000ff";
 
 let db: Db;
@@ -44,7 +77,9 @@ beforeEach(async () => {
   // Neon Auth creates this table, outside the migrations.
   await pglite.execute(sql`create schema neon_auth`);
   await pglite.execute(sql`create table neon_auth."user" (id uuid primary key, email text not null)`);
-  await pglite.execute(sql`insert into neon_auth."user" values (${ADMIN}, 'admin@example.com')`);
+  await pglite.execute(
+    sql`insert into neon_auth."user" values (${ADMIN}, 'admin@example.com'), (${EDITOR}, 'editor@example.com'), (${VIEWER}, 'viewer@example.com')`,
+  );
   db = pglite as unknown as Db;
 });
 
@@ -57,8 +92,29 @@ const seed = async () => {
   const { budgetId, draftId } = await createBudget(db, project, "Base case", null);
   const budget = (await accessBudget(db, ADMIN, budgetId)) as BudgetAccess;
   const draft = (await accessDraft(db, ADMIN, budgetId, draftId)) as DraftAccess;
-  return { buildingId, building, projectId, project, budgetId, budget, draftId, draft, author: authorOfDraft(draft) as DraftAuthor };
+  return {
+    buildingId,
+    building,
+    projectId,
+    project,
+    budgetId,
+    budget,
+    editor: editorOfBudget(budget) as BudgetEditor,
+    admin: adminOfBudget(budget) as BudgetAdmin,
+    draftId,
+    draft,
+    author: authorOfDraft(draft) as DraftAuthor,
+  };
 };
+
+const addMember = (budgetId: string, userId: string, role: Role) => db.insert(tables.budgetMember).values({ budgetId, userId, role });
+
+const budgetAs = async (userId: string, budgetId: string) => (await accessBudget(db, userId, budgetId)) as BudgetAccess;
+const editorAs = async (userId: string, budgetId: string) => editorOfBudget(await budgetAs(userId, budgetId)) as BudgetEditor;
+const draftAs = async (userId: string, budgetId: string, draftId: string) =>
+  (await accessDraft(db, userId, budgetId, draftId)) as DraftAccess;
+const publisherAs = async (userId: string, budgetId: string, draftId: string) =>
+  publisherOfDraft(await draftAs(userId, budgetId, draftId)) as DraftPublisher;
 
 describe("parseName", () => {
   it.each([
@@ -82,6 +138,17 @@ describe("parseNote", () => {
   });
 });
 
+describe("parseRole", () => {
+  it.each([
+    { name: "viewer", value: "viewer", want: "viewer" },
+    { name: "editor", value: "editor", want: "editor" },
+    { name: "admin, which is not a member role", value: "admin", want: null },
+    { name: "a missing field", value: null, want: null },
+  ])("parses $name", ({ value, want }) => {
+    expect(parseRole(value)).toBe(want);
+  });
+});
+
 describe("parseVersionNumber", () => {
   it.each([
     { name: "a version number", value: "12", want: 12 },
@@ -100,14 +167,16 @@ describe("access", () => {
     const { buildingId, projectId, budgetId, draftId } = await seed();
     expect(await adminOfBuilding(db, ADMIN, buildingId)).toEqual({ userId: ADMIN, buildingId });
     expect(await adminOfProject(db, ADMIN, projectId)).toEqual({ userId: ADMIN, buildingId, projectId });
-    expect(await accessBudget(db, ADMIN, budgetId)).toEqual({ userId: ADMIN, budgetId });
-    expect(await accessDraft(db, ADMIN, budgetId, draftId)).toEqual({ userId: ADMIN, budgetId, draftId, isAuthor: true });
+    expect(await accessBuilding(db, ADMIN, buildingId)).toEqual({ userId: ADMIN, buildingId, isAdmin: true });
+    expect(await accessBudget(db, ADMIN, budgetId)).toEqual({ userId: ADMIN, budgetId, role: "admin" });
+    expect(await accessDraft(db, ADMIN, budgetId, draftId)).toEqual({ userId: ADMIN, budgetId, draftId, isAuthor: true, isAdmin: true });
   });
 
   it("refuses another account", async () => {
     const { buildingId, projectId, budgetId, draftId } = await seed();
     expect(await adminOfBuilding(db, OTHER, buildingId)).toBeNull();
     expect(await adminOfProject(db, OTHER, projectId)).toBeNull();
+    expect(await accessBuilding(db, OTHER, buildingId)).toBeNull();
     expect(await accessBudget(db, OTHER, budgetId)).toBeNull();
     expect(await accessDraft(db, OTHER, budgetId, draftId)).toBeNull();
   });
@@ -116,6 +185,7 @@ describe("access", () => {
     const { budgetId } = await seed();
     expect(await adminOfBuilding(db, ADMIN, id)).toBeNull();
     expect(await adminOfProject(db, ADMIN, id)).toBeNull();
+    expect(await accessBuilding(db, ADMIN, id)).toBeNull();
     expect(await accessBudget(db, ADMIN, id)).toBeNull();
     expect(await accessDraft(db, ADMIN, budgetId, id)).toBeNull();
   });
@@ -132,6 +202,7 @@ describe("access", () => {
     const draft = (await accessDraft(db, ADMIN, budgetId, draftId)) as DraftAccess;
     expect(draft.isAuthor).toBe(false);
     expect(authorOfDraft(draft)).toBeNull();
+    expect(publisherOfDraft(draft)).not.toBeNull();
   });
 });
 
@@ -141,17 +212,17 @@ describe("buildings", () => {
     await createBuilding(db, OTHER, "Elm House");
     const birch = await createBuilding(db, ADMIN, "Birch Lofts");
     expect(await listBuildings(db, ADMIN)).toEqual([
-      { id: birch, name: "Birch Lofts" },
-      { id: maple, name: "Maple Court" },
+      { id: birch, name: "Birch Lofts", isAdmin: true },
+      { id: maple, name: "Maple Court", isAdmin: true },
     ]);
   });
 
   it("shows projects with their budgets by name, including empty projects", async () => {
-    const { building, project, projectId, budgetId } = await seed();
+    const { buildingId, building, project, projectId, budgetId } = await seed();
     const { budgetId: roofId } = await createBudget(db, project, "New roof", null);
     const { budgetId: auditId } = await createBudget(db, project, "Audit", null);
     const emptyId = await createProject(db, building, "FY2028");
-    expect(await getBuilding(db, building)).toEqual({
+    expect(await getBuilding(db, (await accessBuilding(db, ADMIN, buildingId)) as BuildingAccess)).toEqual({
       name: "Maple Court",
       projects: [
         {
@@ -171,90 +242,105 @@ describe("buildings", () => {
 
 describe("budgets", () => {
   it("starts a new budget with one empty draft", async () => {
-    const { budget, draft, author, draftId, buildingId, projectId } = await seed();
-    expect(await getBudget(db, budget)).toMatchObject({
+    const { budget, editor, draft, draftId, buildingId, projectId } = await seed();
+    expect(await getBudget(db, budget)).toEqual({
       name: "Base case",
+      latestVersion: 0,
       building: { id: buildingId, name: "Maple Court" },
       project: { id: projectId, name: "FY2027" },
-      drafts: [{ id: draftId, name: FIRST_DRAFT_NAME }],
     });
-    expect(await getDraft(db, author)).toEqual({ name: FIRST_DRAFT_NAME, baseVersion: 0, revision: 0, content: EMPTY_BUDGET });
+    expect(await listDrafts(db, editor)).toMatchObject([
+      { id: draftId, name: FIRST_DRAFT_NAME, authorId: ADMIN, author: "admin@example.com" },
+    ]);
+    expect(await getDraft(db, draft)).toEqual({
+      name: FIRST_DRAFT_NAME,
+      author: "admin@example.com",
+      baseVersion: 0,
+      revision: 0,
+      content: EMPTY_BUDGET,
+    });
     expect(await getBudget(db, draft)).toEqual(await getBudget(db, budget));
   });
 
   it("copies the newest draft of another budget", async () => {
-    const { building, budget, author } = await seed();
-    const olderId = await createDraft(db, budget, "Older", EMPTY_BUDGET);
+    const { building, editor, admin, author } = await seed();
+    const olderId = await createDraft(db, editor, "Older", EMPTY_BUDGET);
     await db
       .update(tables.budgetDraft)
       .set({ updatedAt: new Date("2026-01-01T00:00:00Z") })
       .where(eq(tables.budgetDraft.id, olderId));
     await saveDraft(db, author, 0, DEFAULT_BUDGET);
     const nextYear = (await adminOfProject(db, ADMIN, await createProject(db, building, "FY2028"))) as ProjectAdmin;
-    const { budgetId, draftId } = await createBudget(db, nextYear, "Base case", budget);
-    const copy = (await accessDraft(db, ADMIN, budgetId, draftId)) as DraftAccess;
-    expect((await getDraft(db, authorOfDraft(copy) as DraftAuthor)).content).toEqual(DEFAULT_BUDGET);
+    const { budgetId, draftId } = await createBudget(db, nextYear, "Base case", admin);
+    expect((await getDraft(db, await draftAs(ADMIN, budgetId, draftId))).content).toEqual(DEFAULT_BUDGET);
   });
 
   it("starts empty when the copied budget has no drafts", async () => {
-    const { project, budget, draft, author } = await seed();
-    await deleteDraft(db, draft);
-    const { budgetId, draftId } = await createBudget(db, project, "New roof", budget);
-    const copy = (await accessDraft(db, ADMIN, budgetId, draftId)) as DraftAccess;
-    expect((await getDraft(db, authorOfDraft(copy) as DraftAuthor)).content).toEqual(EMPTY_BUDGET);
+    const { project, admin, budgetId: copiedId, draftId: copiedDraftId, author } = await seed();
+    await deleteDraft(db, await publisherAs(ADMIN, copiedId, copiedDraftId));
+    const { budgetId, draftId } = await createBudget(db, project, "New roof", admin);
+    expect((await getDraft(db, await draftAs(ADMIN, budgetId, draftId))).content).toEqual(EMPTY_BUDGET);
     expect(author.draftId).not.toBe(draftId);
   });
 });
 
 describe("drafts", () => {
   it("adds a draft with the given content, listed newest first", async () => {
-    const { budget, budgetId, draftId } = await seed();
-    const savedId = await createDraft(db, budget, "From the calculator", DEFAULT_BUDGET);
+    const { editor, budgetId, draftId } = await seed();
+    const savedId = await createDraft(db, editor, "From the calculator", DEFAULT_BUDGET);
     await db
       .update(tables.budgetDraft)
       .set({ updatedAt: new Date("2026-11-01T00:00:00Z") })
       .where(eq(tables.budgetDraft.id, draftId));
-    const saved = (await accessDraft(db, ADMIN, budgetId, savedId)) as DraftAccess;
-    expect(await getDraft(db, authorOfDraft(saved) as DraftAuthor)).toEqual({
+    expect(await getDraft(db, await draftAs(ADMIN, budgetId, savedId))).toEqual({
       name: "From the calculator",
+      author: "admin@example.com",
       baseVersion: 0,
       revision: 0,
       content: DEFAULT_BUDGET,
     });
-    expect((await getBudget(db, budget)).drafts.map((draft) => draft.id)).toEqual([savedId, draftId]);
+    expect((await listDrafts(db, editor)).map((draft) => draft.id)).toEqual([savedId, draftId]);
   });
 
   it("saves with the current revision and refuses an old one", async () => {
-    const { author } = await seed();
+    const { draft, author } = await seed();
     expect(await saveDraft(db, author, 0, DEFAULT_BUDGET)).toEqual({ status: "saved", revision: 1 });
     expect(await saveDraft(db, author, 0, EMPTY_BUDGET)).toEqual({ status: "stale" });
-    expect(await getDraft(db, author)).toMatchObject({ revision: 1, content: DEFAULT_BUDGET });
+    expect(await getDraft(db, draft)).toMatchObject({ revision: 1, content: DEFAULT_BUDGET });
     expect(await saveDraft(db, author, 1, EMPTY_BUDGET)).toEqual({ status: "saved", revision: 2 });
   });
 
   it("normalizes stored content on read", async () => {
-    const { author } = await seed();
+    const { draft } = await seed();
     await db.update(tables.budgetDraft).set({ content: { owners: [{ id: "o", name: "Ann" }] } as never });
-    expect((await getDraft(db, author)).content.owners).toEqual([{ id: "o", name: "Ann", isBoard: false, currentMonthly: 0 }]);
+    expect((await getDraft(db, draft)).content.owners).toEqual([{ id: "o", name: "Ann", isBoard: false, currentMonthly: 0 }]);
   });
 
   it("deletes a draft", async () => {
-    const { budget, draft } = await seed();
-    await deleteDraft(db, draft);
-    expect((await getBudget(db, budget)).drafts).toEqual([]);
+    const { editor, budgetId, draftId } = await seed();
+    await deleteDraft(db, await publisherAs(ADMIN, budgetId, draftId));
+    expect(await listDrafts(db, editor)).toEqual([]);
+  });
+
+  it("shows no author for an account that no longer exists", async () => {
+    const { editor, draft } = await seed();
+    await db.execute(sql`delete from neon_auth."user"`);
+    expect(await listDrafts(db, editor)).toMatchObject([{ author: null }]);
+    expect(await getDraft(db, draft)).toMatchObject({ author: null });
   });
 });
 
 // Publishing runs in a transaction, which PGlite supports like the WebSocket driver does.
 const publish = (draft: DraftAccess, revision = 0, confirmedLatest = 0, note = "") =>
-  publishDraft(db, draft, { revision, note, confirmedLatest });
+  publishDraft(db, publisherOfDraft(draft) as DraftPublisher, { revision, note, confirmedLatest });
 
 describe("versions", () => {
   it("publishes a draft as version 1 and removes the draft", async () => {
-    const { budget, draft, author } = await seed();
+    const { budget, editor, draft, author } = await seed();
     await saveDraft(db, author, 0, DEFAULT_BUDGET);
     expect(await publish(draft, 1, 0, "Board approved")).toEqual({ status: "published", number: 1 });
-    expect(await getBudget(db, budget)).toMatchObject({ latestVersion: 1, drafts: [] });
+    expect(await getBudget(db, budget)).toMatchObject({ latestVersion: 1 });
+    expect(await listDrafts(db, editor)).toEqual([]);
     expect(await getVersion(db, budget, 1)).toEqual({
       number: 1,
       basedOn: 0,
@@ -266,18 +352,18 @@ describe("versions", () => {
   });
 
   it("numbers versions in order and records the version each draft started from", async () => {
-    const { budget, draft } = await seed();
+    const { budget, editor, draft } = await seed();
     await publish(draft);
-    const restoreId = (await createDraftFromVersion(db, budget, "Restore", 1)) as string;
+    const restoreId = (await createDraftFromVersion(db, editor, "Restore", 1)) as string;
     const restore = (await accessDraft(db, ADMIN, budget.budgetId, restoreId)) as DraftAccess;
-    expect((await getBudget(db, budget)).drafts).toMatchObject([{ id: restoreId, baseVersion: 1, revision: 0 }]);
+    expect(await listDrafts(db, editor)).toMatchObject([{ id: restoreId, baseVersion: 1, revision: 0 }]);
     expect(await publish(restore)).toEqual({ status: "published", number: 2 });
     expect(await getVersion(db, budget, 2)).toMatchObject({ number: 2, basedOn: 1, content: EMPTY_BUDGET });
   });
 
   it("asks to review the latest version when another publish came first", async () => {
-    const { budget, draft, author } = await seed();
-    const otherId = await createDraft(db, budget, "Other", EMPTY_BUDGET);
+    const { budget, editor, draft, author } = await seed();
+    const otherId = await createDraft(db, editor, "Other", EMPTY_BUDGET);
     await saveDraft(db, author, 0, DEFAULT_BUDGET);
     expect(await publish(draft, 1)).toEqual({ status: "published", number: 1 });
     const other = (await accessDraft(db, ADMIN, budget.budgetId, otherId)) as DraftAccess;
@@ -294,7 +380,7 @@ describe("versions", () => {
 
   it("reports a draft deleted after the access check", async () => {
     const { draft } = await seed();
-    await deleteDraft(db, draft);
+    await deleteDraft(db, publisherOfDraft(draft) as DraftPublisher);
     expect(await publish(draft)).toEqual({ status: "missing" });
   });
 
@@ -309,7 +395,7 @@ describe("versions", () => {
     const { project, budget, draft } = await seed();
     await publish(draft);
     const { budgetId: otherId } = await createBudget(db, project, "New roof", null);
-    const other = (await accessBudget(db, ADMIN, otherId)) as BudgetAccess;
+    const other = await editorAs(ADMIN, otherId);
     expect(await getVersion(db, budget, 2)).toBeNull();
     expect(await getVersion(db, other, 1)).toBeNull();
     expect(await createDraftFromVersion(db, other, "Restore", 1)).toBeNull();
@@ -323,9 +409,9 @@ describe("versions", () => {
   });
 
   it("lists the changelog newest first, each version against the one before", async () => {
-    const { budget, draft } = await seed();
+    const { budget, editor, draft } = await seed();
     await publish(draft, 0, 0, "First");
-    const secondId = await createDraft(db, budget, "Second", DEFAULT_BUDGET);
+    const secondId = await createDraft(db, editor, "Second", DEFAULT_BUDGET);
     await publish((await accessDraft(db, ADMIN, budget.budgetId, secondId)) as DraftAccess, 0, 1, "Second");
     expect(await getChangelog(db, budget)).toEqual([
       expect.objectContaining({
@@ -339,35 +425,305 @@ describe("versions", () => {
   });
 
   it("copies the latest version into a new budget, ahead of newer drafts", async () => {
-    const { building, budget, draft } = await seed();
+    const { building, budget, editor, admin, draft } = await seed();
     await publish(draft);
-    const restoreId = (await createDraftFromVersion(db, budget, "Restore", 1)) as string;
+    const restoreId = (await createDraftFromVersion(db, editor, "Restore", 1)) as string;
     const restore = (await accessDraft(db, ADMIN, budget.budgetId, restoreId)) as DraftAccess;
     await saveDraft(db, authorOfDraft(restore) as DraftAuthor, 0, DEFAULT_BUDGET);
     const nextYear = (await adminOfProject(db, ADMIN, await createProject(db, building, "FY2028"))) as ProjectAdmin;
-    const { budgetId, draftId } = await createBudget(db, nextYear, "Base case", budget);
-    const copy = (await accessDraft(db, ADMIN, budgetId, draftId)) as DraftAccess;
-    expect(await getDraft(db, authorOfDraft(copy) as DraftAuthor)).toMatchObject({ baseVersion: 0, content: EMPTY_BUDGET });
+    const { budgetId, draftId } = await createBudget(db, nextYear, "Base case", admin);
+    expect(await getDraft(db, await draftAs(ADMIN, budgetId, draftId))).toMatchObject({ baseVersion: 0, content: EMPTY_BUDGET });
+  });
+});
+
+// The admin and an editor each wrote one draft, and a viewer and a non-member look on.
+const seedShared = async () => {
+  const seeded = await seed();
+  await addMember(seeded.budgetId, EDITOR, "editor");
+  await addMember(seeded.budgetId, VIEWER, "viewer");
+  const editorDraftId = await createDraft(db, await editorAs(EDITOR, seeded.budgetId), "Editor's", EMPTY_BUDGET);
+  return { ...seeded, editorDraftId };
+};
+
+type Shared = Awaited<ReturnType<typeof seedShared>>;
+
+const onBudget =
+  (check: (access: BudgetAccess) => boolean) =>
+  async (userId: string, { budgetId }: Shared): Promise<boolean> => {
+    const access = await accessBudget(db, userId, budgetId);
+    return access !== null && check(access);
+  };
+
+// Reports [on the admin's draft, on the editor's draft].
+const onDrafts =
+  (check: (access: DraftAccess) => boolean) =>
+  ({ budgetId, draftId, editorDraftId }: Shared, userId: string): Promise<boolean[]> =>
+    Promise.all(
+      [draftId, editorDraftId].map(async (id) => {
+        const access = await accessDraft(db, userId, budgetId, id);
+        return access !== null && check(access);
+      }),
+    );
+
+describe("permissions", () => {
+  it.each([
+    { action: "see published versions and the changelog", check: onBudget(() => true), viewer: true, editor: true, admin: true },
+    { action: "create a draft", check: onBudget((access) => editorOfBudget(access) !== null), viewer: false, editor: true, admin: true },
+    {
+      action: "manage members and invites",
+      check: onBudget((access) => adminOfBudget(access) !== null),
+      viewer: false,
+      editor: false,
+      admin: true,
+    },
+  ])("lets a role $action", async ({ check, viewer, editor, admin }) => {
+    const shared = await seedShared();
+    const got = { viewer: await check(VIEWER, shared), editor: await check(EDITOR, shared), admin: await check(ADMIN, shared) };
+    expect(got).toEqual({ viewer, editor, admin });
+    expect(await check(OTHER, shared)).toBe(false);
+  });
+
+  it.each([
+    { action: "see drafts", check: () => true, viewer: [false, false], editor: [true, true], admin: [true, true] },
+    {
+      action: "edit a draft",
+      check: (access: DraftAccess) => authorOfDraft(access) !== null,
+      viewer: [false, false],
+      editor: [false, true],
+      admin: [true, false],
+    },
+    {
+      action: "publish or delete a draft",
+      check: (access: DraftAccess) => publisherOfDraft(access) !== null,
+      viewer: [false, false],
+      editor: [false, true],
+      admin: [true, true],
+    },
+  ])("lets a role $action, on the admin's draft and the editor's draft", async ({ check, viewer, editor, admin }) => {
+    const shared = await seedShared();
+    const on = onDrafts(check);
+    const got = { viewer: await on(shared, VIEWER), editor: await on(shared, EDITOR), admin: await on(shared, ADMIN) };
+    expect(got).toEqual({ viewer, editor, admin });
+    expect(await on(shared, OTHER)).toEqual([false, false]);
+  });
+
+  it.each([VIEWER, EDITOR])("lets only the admin create a project or budget, not %s", async (userId) => {
+    const { buildingId, projectId } = await seedShared();
+    expect(await adminOfBuilding(db, userId, buildingId)).toBeNull();
+    expect(await adminOfProject(db, userId, projectId)).toBeNull();
+  });
+
+  it("gives members their role", async () => {
+    const { budgetId } = await seedShared();
+    expect(await accessBudget(db, VIEWER, budgetId)).toEqual({ userId: VIEWER, budgetId, role: "viewer" });
+    expect(await accessBudget(db, EDITOR, budgetId)).toEqual({ userId: EDITOR, budgetId, role: "editor" });
+  });
+
+  it("publishes an editor's draft for its author and for the admin", async () => {
+    const { budget, budgetId, editorDraftId } = await seedShared();
+    const editorDraft = await draftAs(EDITOR, budgetId, editorDraftId);
+    expect(editorDraft).toMatchObject({ isAuthor: true, isAdmin: false });
+    expect(await publish(editorDraft)).toEqual({ status: "published", number: 1 });
+    expect(await getVersion(db, budget, 1)).toMatchObject({ publishedBy: "editor@example.com" });
+    const secondId = await createDraft(db, await editorAs(EDITOR, budgetId), "Second", DEFAULT_BUDGET);
+    expect(await publish(await draftAs(ADMIN, budgetId, secondId), 0, 1)).toEqual({ status: "published", number: 2 });
+    expect(await getVersion(db, budget, 2)).toMatchObject({ publishedBy: "admin@example.com" });
+  });
+
+  it("shows a member only the shared budgets in a building, and the projects that hold them", async () => {
+    const { buildingId, building, project, projectId, budgetId } = await seedShared();
+    const { budgetId: roofId } = await createBudget(db, project, "New roof", null);
+    await createProject(db, building, "FY2028");
+    const otherBuildingId = await createBuilding(db, ADMIN, "Elm House");
+    const elmProject = (await adminOfProject(
+      db,
+      ADMIN,
+      await createProject(db, (await adminOfBuilding(db, ADMIN, otherBuildingId)) as BuildingAdmin, "FY2027"),
+    )) as ProjectAdmin;
+    const { budgetId: elmId } = await createBudget(db, elmProject, "Base case", null);
+    await addMember(roofId, VIEWER, "editor");
+    await addMember(elmId, EDITOR, "viewer");
+
+    const viewerBuilding = (await accessBuilding(db, VIEWER, buildingId)) as BuildingAccess;
+    expect(viewerBuilding).toEqual({ userId: VIEWER, buildingId, isAdmin: false });
+    expect(await getBuilding(db, viewerBuilding)).toEqual({
+      name: "Maple Court",
+      projects: [
+        {
+          id: projectId,
+          name: "FY2027",
+          budgets: [
+            { id: budgetId, name: "Base case" },
+            { id: roofId, name: "New roof" },
+          ],
+        },
+      ],
+    });
+    expect(await accessBuilding(db, VIEWER, otherBuildingId)).toBeNull();
+    expect(await listBuildings(db, VIEWER)).toEqual([{ id: buildingId, name: "Maple Court", isAdmin: false }]);
+    expect(await listBuildings(db, EDITOR)).toEqual([
+      { id: otherBuildingId, name: "Elm House", isAdmin: false },
+      { id: buildingId, name: "Maple Court", isAdmin: false },
+    ]);
+    expect(await getBuilding(db, (await accessBuilding(db, EDITOR, otherBuildingId)) as BuildingAccess)).toMatchObject({
+      projects: [{ budgets: [{ id: elmId }] }],
+    });
+  });
+});
+
+describe("members", () => {
+  it("lists members by email", async () => {
+    const { budgetId, admin } = await seedShared();
+    await addMember(budgetId, OTHER, "viewer");
+    expect(await listMembers(db, admin)).toEqual([
+      { userId: EDITOR, email: "editor@example.com", role: "editor" },
+      { userId: VIEWER, email: "viewer@example.com", role: "viewer" },
+      { userId: OTHER, email: null, role: "viewer" },
+    ]);
+  });
+
+  it("changes a role, and the drafts stay when an editor becomes a viewer", async () => {
+    const { budgetId, admin, editorDraftId } = await seedShared();
+    await setMemberRole(db, admin, EDITOR, "viewer");
+    await setMemberRole(db, admin, VIEWER, "editor");
+    expect(await accessBudget(db, EDITOR, budgetId)).toMatchObject({ role: "viewer" });
+    expect(await accessBudget(db, VIEWER, budgetId)).toMatchObject({ role: "editor" });
+    expect(await accessDraft(db, EDITOR, budgetId, editorDraftId)).toBeNull();
+    expect(publisherOfDraft(await draftAs(ADMIN, budgetId, editorDraftId))).not.toBeNull();
+  });
+
+  it("removes a member, and their drafts stay", async () => {
+    const { buildingId, budgetId, admin, editor, editorDraftId } = await seedShared();
+    await removeMember(db, admin, EDITOR);
+    expect(await accessBudget(db, EDITOR, budgetId)).toBeNull();
+    expect(await accessBuilding(db, EDITOR, buildingId)).toBeNull();
+    expect(await listDrafts(db, editor)).toMatchObject([{ id: editorDraftId, author: "editor@example.com" }, {}]);
+  });
+
+  it("changes only members of the granted budget", async () => {
+    const { project, budgetId } = await seedShared();
+    const { budgetId: roofId } = await createBudget(db, project, "New roof", null);
+    const roof = adminOfBudget(await budgetAs(ADMIN, roofId)) as BudgetAdmin;
+    await setMemberRole(db, roof, EDITOR, "viewer");
+    await removeMember(db, roof, VIEWER);
+    await setMemberRole(db, roof, "not-a-uuid", "viewer");
+    await removeMember(db, roof, "not-a-uuid");
+    expect(await accessBudget(db, EDITOR, budgetId)).toMatchObject({ role: "editor" });
+    expect(await accessBudget(db, VIEWER, budgetId)).toMatchObject({ role: "viewer" });
+  });
+});
+
+const NOW = new Date("2026-11-01T00:00:00Z");
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const at = (ms: number) => new Date(NOW.getTime() + ms);
+
+describe("invites", () => {
+  it("adds a member with the invite's role, once", async () => {
+    const { budgetId, admin } = await seed();
+    const token = await createInvite(db, admin, "editor", NOW);
+    expect(await peekInvite(db, EDITOR, token, NOW)).toEqual({ status: "valid", budgetId, budgetName: "Base case", role: "editor" });
+    expect(await accessBudget(db, EDITOR, budgetId)).toBeNull();
+    expect(await acceptInvite(db, EDITOR, token, NOW)).toEqual({ status: "joined", budgetId });
+    expect(await accessBudget(db, EDITOR, budgetId)).toMatchObject({ role: "editor" });
+    expect(await acceptInvite(db, VIEWER, token, NOW)).toEqual({ status: "used" });
+    expect(await peekInvite(db, VIEWER, token, NOW)).toEqual({ status: "used" });
+    expect(await accessBudget(db, VIEWER, budgetId)).toBeNull();
+  });
+
+  it("stores only a hash of the token", async () => {
+    const { admin } = await seed();
+    const token = await createInvite(db, admin, "viewer", NOW);
+    const [row] = await db.select().from(tables.budgetInvite);
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(row).toMatchObject({ role: "viewer", createdBy: ADMIN, expiresAt: at(WEEK_MS), acceptedBy: null, acceptedAt: null });
+    expect(row?.tokenHash).not.toContain(token);
+  });
+
+  it.each([
+    { name: "just before 7 days", ms: WEEK_MS - 1, want: "joined" },
+    { name: "at 7 days", ms: WEEK_MS, want: "expired" },
+  ])("accepts or expires $name", async ({ ms, want }) => {
+    const { admin } = await seed();
+    const token = await createInvite(db, admin, "viewer", NOW);
+    expect(await acceptInvite(db, VIEWER, token, at(ms))).toMatchObject({ status: want });
+  });
+
+  it("refuses a wrong token or a revoked invite", async () => {
+    const { admin } = await seed();
+    const token = await createInvite(db, admin, "viewer", NOW);
+    expect(await acceptInvite(db, VIEWER, `${token}x`, NOW)).toEqual({ status: "invalid" });
+    const [invite] = await listInvites(db, admin, NOW);
+    await revokeInvite(db, admin, invite?.id as string);
+    expect(await acceptInvite(db, VIEWER, token, NOW)).toEqual({ status: "invalid" });
+    expect(await peekInvite(db, VIEWER, token, NOW)).toEqual({ status: "invalid" });
+  });
+
+  it("opens the budget for an account that can already reach it, and leaves the link unused", async () => {
+    const { budgetId, admin } = await seedShared();
+    const token = await createInvite(db, admin, "editor", NOW);
+    expect(await acceptInvite(db, VIEWER, token, NOW)).toEqual({ status: "open", budgetId });
+    expect(await acceptInvite(db, ADMIN, token, NOW)).toEqual({ status: "open", budgetId });
+    expect(await peekInvite(db, ADMIN, token, NOW)).toEqual({ status: "open", budgetId });
+    expect(await accessBudget(db, VIEWER, budgetId)).toMatchObject({ role: "viewer" });
+    expect(await listMembers(db, admin)).toHaveLength(2);
+    expect(await acceptInvite(db, OTHER, token, NOW)).toEqual({ status: "joined", budgetId });
+  });
+
+  it("lists unused invites that have not expired, newest first", async () => {
+    const { admin } = await seed();
+    const usedToken = await createInvite(db, admin, "viewer", NOW);
+    await acceptInvite(db, VIEWER, usedToken, NOW);
+    await createInvite(db, admin, "viewer", at(-WEEK_MS));
+    await createInvite(db, admin, "viewer", NOW);
+    await createInvite(db, admin, "editor", at(1000));
+    expect(await listInvites(db, admin, NOW)).toEqual([
+      { id: expect.any(String), role: "editor", expiresAt: at(WEEK_MS + 1000) },
+      { id: expect.any(String), role: "viewer", expiresAt: at(WEEK_MS) },
+    ]);
+  });
+
+  it("revokes only unused invites of the granted budget", async () => {
+    const { project, admin } = await seed();
+    const usedToken = await createInvite(db, admin, "viewer", NOW);
+    await acceptInvite(db, VIEWER, usedToken, NOW);
+    await createInvite(db, admin, "editor", NOW);
+    const { budgetId: roofId } = await createBudget(db, project, "New roof", null);
+    const roof = adminOfBudget(await budgetAs(ADMIN, roofId)) as BudgetAdmin;
+    const invites = await db.select({ id: tables.budgetInvite.id }).from(tables.budgetInvite);
+    for (const { id } of invites) {
+      await revokeInvite(db, roof, id);
+    }
+    await revokeInvite(db, admin, "not-a-uuid");
+    expect(await db.$count(tables.budgetInvite)).toBe(2);
+    for (const { id } of invites) {
+      await revokeInvite(db, admin, id);
+    }
+    expect(await db.select({ acceptedBy: tables.budgetInvite.acceptedBy }).from(tables.budgetInvite)).toEqual([{ acceptedBy: VIEWER }]);
   });
 });
 
 describe("schema", () => {
   // Catches a schema change that was not followed by `npm run db:generate`.
-  it.each([tables.building, tables.project, tables.budget, tables.budgetDraft, tables.budgetVersion])(
-    "matches the generated migrations",
-    async (table) => {
-      const migrations = readdirSync("drizzle")
-        .filter((file) => file.endsWith(".sql"))
-        .map((file) => readFileSync(`drizzle/${file}`, "utf8"))
-        .join("\n");
-      const { name, foreignKeys, indexes } = getTableConfig(table);
-      for (const key of foreignKeys) {
-        expect(migrations).toContain(`ADD CONSTRAINT "${key.getName()}"`);
-      }
-      for (const index of indexes) {
-        const columns = index.config.columns.map((column) => `"${(column as { name: string }).name}"`).join(", ");
-        expect(migrations).toContain(`ON "${name}" USING btree (${columns})`);
-      }
-    },
-  );
+  it.each([
+    tables.building,
+    tables.project,
+    tables.budget,
+    tables.budgetDraft,
+    tables.budgetVersion,
+    tables.budgetMember,
+    tables.budgetInvite,
+  ])("matches the generated migrations", async (table) => {
+    const migrations = readdirSync("drizzle")
+      .filter((file) => file.endsWith(".sql"))
+      .map((file) => readFileSync(`drizzle/${file}`, "utf8"))
+      .join("\n");
+    const { name, foreignKeys, indexes } = getTableConfig(table);
+    for (const key of foreignKeys) {
+      expect(migrations).toContain(`ADD CONSTRAINT "${key.getName()}"`);
+    }
+    for (const index of indexes) {
+      const columns = index.config.columns.map((column) => `"${(column as { name: string }).name}"`).join(", ");
+      expect(migrations).toContain(`ON "${name}" USING btree (${columns})`);
+    }
+  });
 });

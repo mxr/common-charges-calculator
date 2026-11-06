@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { PendingInvite } from "@/app/_components/pending-invite";
 import { PendingSave } from "@/app/_components/pending-save";
 import { BUTTON_CLASS, INPUT_CLASS, LINK_CLASS } from "@/app/_components/styles";
 import { getAuth, getDb, requireUser } from "@/app/_server/services";
@@ -22,6 +23,7 @@ export default async function BuildingsPage() {
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-6 px-6 py-16">
       <h1 className="text-2xl font-semibold">Buildings</h1>
       <p className="text-sm text-[#5b5148]">Logged in as {user.email}.</p>
+      <PendingInvite />
       <PendingSave />
       {buildings.length === 0 ? (
         <p className="text-sm text-[#5b5148]">You have no buildings yet.</p>
@@ -32,6 +34,7 @@ export default async function BuildingsPage() {
               <Link href={`/buildings/${building.id}`} className={LINK_CLASS}>
                 {building.name}
               </Link>
+              {building.isAdmin ? null : <span className="text-sm text-[#5b5148]"> (shared with you)</span>}
             </li>
           ))}
         </ul>
