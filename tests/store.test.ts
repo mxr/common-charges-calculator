@@ -21,13 +21,18 @@ import {
 import * as tables from "../lib/server/schema";
 import {
   acceptInvite,
+  budgetImpact,
+  buildingImpact,
   createBudget,
   createBuilding,
   createDraft,
   createDraftFromVersion,
   createInvite,
   createProject,
+  deleteBudget,
+  deleteBuilding,
   deleteDraft,
+  deleteProject,
   FIRST_DRAFT_NAME,
   getBudget,
   getBuilding,
@@ -43,8 +48,13 @@ import {
   parseRole,
   parseVersionNumber,
   peekInvite,
+  projectImpact,
   publishDraft,
   removeMember,
+  renameBudget,
+  renameBuilding,
+  renameDraft,
+  renameProject,
   revokeInvite,
   saveDraft,
   setMemberRole,
@@ -470,8 +480,22 @@ describe("permissions", () => {
     { action: "see published versions and the changelog", check: onBudget(() => true), viewer: true, editor: true, admin: true },
     { action: "create a draft", check: onBudget((access) => editorOfBudget(access) !== null), viewer: false, editor: true, admin: true },
     {
-      action: "manage members and invites",
+      action: "manage members and invites, or rename or delete the budget",
       check: onBudget((access) => adminOfBudget(access) !== null),
+      viewer: false,
+      editor: false,
+      admin: true,
+    },
+    {
+      action: "create a budget, or rename or delete the project",
+      check: async (userId: string, { projectId }: Shared) => (await adminOfProject(db, userId, projectId)) !== null,
+      viewer: false,
+      editor: false,
+      admin: true,
+    },
+    {
+      action: "create a project, or rename or delete the building",
+      check: async (userId: string, { buildingId }: Shared) => (await adminOfBuilding(db, userId, buildingId)) !== null,
       viewer: false,
       editor: false,
       admin: true,
@@ -486,7 +510,7 @@ describe("permissions", () => {
   it.each([
     { action: "see drafts", check: () => true, viewer: [false, false], editor: [true, true], admin: [true, true] },
     {
-      action: "edit a draft",
+      action: "edit or rename a draft",
       check: (access: DraftAccess) => authorOfDraft(access) !== null,
       viewer: [false, false],
       editor: [false, true],
@@ -505,12 +529,6 @@ describe("permissions", () => {
     const got = { viewer: await on(shared, VIEWER), editor: await on(shared, EDITOR), admin: await on(shared, ADMIN) };
     expect(got).toEqual({ viewer, editor, admin });
     expect(await on(shared, OTHER)).toEqual([false, false]);
-  });
-
-  it.each([VIEWER, EDITOR])("lets only the admin create a project or budget, not %s", async (userId) => {
-    const { buildingId, projectId } = await seedShared();
-    expect(await adminOfBuilding(db, userId, buildingId)).toBeNull();
-    expect(await adminOfProject(db, userId, projectId)).toBeNull();
   });
 
   it("gives members their role", async () => {
@@ -700,6 +718,131 @@ describe("invites", () => {
     }
     expect(await db.select({ acceptedBy: tables.budgetInvite.acceptedBy }).from(tables.budgetInvite)).toEqual([{ acceptedBy: VIEWER }]);
   });
+});
+
+type Seeded = Awaited<ReturnType<typeof seed>>;
+
+describe("rename", () => {
+  it.each([
+    {
+      what: "building",
+      rename: (s: Seeded) => renameBuilding(db, s.building, "Elm House"),
+      read: async (s: Seeded) => (await getBuilding(db, (await accessBuilding(db, ADMIN, s.buildingId)) as BuildingAccess)).name,
+    },
+    {
+      what: "project",
+      rename: (s: Seeded) => renameProject(db, s.project, "Elm House"),
+      read: async (s: Seeded) => (await getBudget(db, s.budget)).project.name,
+    },
+    {
+      what: "budget",
+      rename: (s: Seeded) => renameBudget(db, s.admin, "Elm House"),
+      read: async (s: Seeded) => (await getBudget(db, s.budget)).name,
+    },
+    {
+      what: "draft",
+      rename: (s: Seeded) => renameDraft(db, s.author, "Elm House"),
+      read: async (s: Seeded) => (await getDraft(db, s.draft)).name,
+    },
+  ])("renames a $what", async ({ rename, read }) => {
+    const seeded = await seed();
+    await rename(seeded);
+    expect(await read(seeded)).toBe("Elm House");
+  });
+
+  it("keeps a draft's revision, so an open editor can still save", async () => {
+    const { draft, author } = await seed();
+    await renameDraft(db, author, "New roof");
+    expect(await saveDraft(db, author, 0, DEFAULT_BUDGET)).toEqual({ status: "saved", revision: 1 });
+    expect(await getDraft(db, draft)).toMatchObject({ name: "New roof", content: DEFAULT_BUDGET });
+  });
+});
+
+// The shared budget holds a version, the editor's draft, two members, and an invite. Its sibling budget, a second
+// project, and a second building show what each delete leaves alone.
+const seedTree = async () => {
+  const shared = await seedShared();
+  await publish(shared.draft);
+  await createInvite(db, shared.admin, "editor", NOW);
+  const { budgetId: roofId } = await createBudget(db, shared.project, "New roof", null);
+  await addMember(roofId, EDITOR, "viewer");
+  const nextYear = (await adminOfProject(db, ADMIN, await createProject(db, shared.building, "FY2028"))) as ProjectAdmin;
+  const { budgetId: nextYearId } = await createBudget(db, nextYear, "Base case", null);
+  await addMember(nextYearId, OTHER, "viewer");
+  const elm = (await adminOfBuilding(db, ADMIN, await createBuilding(db, ADMIN, "Elm House"))) as BuildingAdmin;
+  await createBudget(db, (await adminOfProject(db, ADMIN, await createProject(db, elm, "FY2027"))) as ProjectAdmin, "Base case", null);
+  return shared;
+};
+
+type Tree = Awaited<ReturnType<typeof seedTree>>;
+
+const countRows = async () => ({
+  buildings: await db.$count(tables.building),
+  projects: await db.$count(tables.project),
+  budgets: await db.$count(tables.budget),
+  drafts: await db.$count(tables.budgetDraft),
+  versions: await db.$count(tables.budgetVersion),
+  members: await db.$count(tables.budgetMember),
+  invites: await db.$count(tables.budgetInvite),
+});
+
+const TREE_ROWS = { buildings: 2, projects: 3, budgets: 4, drafts: 4, versions: 1, members: 4, invites: 1 };
+
+const EDITOR_MEMBER = { userId: EDITOR, email: "editor@example.com" };
+const VIEWER_MEMBER = { userId: VIEWER, email: "viewer@example.com" };
+
+const DELETES = [
+  {
+    what: "budget",
+    name: "Base case",
+    impact: (t: Tree) => budgetImpact(db, t.admin),
+    remove: (t: Tree, typed: string) => deleteBudget(db, t.admin, typed),
+    removes: { budgets: 1, drafts: 1, versions: 1, members: [EDITOR_MEMBER, VIEWER_MEMBER] },
+    left: { buildings: 2, projects: 3, budgets: 3, drafts: 3, versions: 0, members: 2, invites: 0 },
+  },
+  {
+    what: "project",
+    name: "FY2027",
+    impact: (t: Tree) => projectImpact(db, t.project),
+    remove: (t: Tree, typed: string) => deleteProject(db, t.project, typed),
+    // The editor is a member of both budgets in the project, and is listed once.
+    removes: { budgets: 2, drafts: 2, versions: 1, members: [EDITOR_MEMBER, VIEWER_MEMBER] },
+    left: { buildings: 2, projects: 2, budgets: 2, drafts: 2, versions: 0, members: 1, invites: 0 },
+  },
+  {
+    what: "building",
+    name: "Maple Court",
+    impact: (t: Tree) => buildingImpact(db, t.building),
+    remove: (t: Tree, typed: string) => deleteBuilding(db, t.building, typed),
+    removes: { budgets: 3, drafts: 3, versions: 1, members: [EDITOR_MEMBER, VIEWER_MEMBER, { userId: OTHER, email: null }] },
+    left: { buildings: 1, projects: 1, budgets: 1, drafts: 1, versions: 0, members: 0, invites: 0 },
+  },
+];
+
+describe("delete", () => {
+  it.each(DELETES)("shows what deleting a $what removes", async ({ impact, removes }) => {
+    expect(await impact(await seedTree())).toEqual(removes);
+  });
+
+  it.each(DELETES)("deletes a $what and everything inside it", async ({ name, remove, left }) => {
+    const tree = await seedTree();
+    expect(await countRows()).toEqual(TREE_ROWS);
+    expect(await remove(tree, name)).toBe(true);
+    expect(await countRows()).toEqual(left);
+    for (const userId of [ADMIN, EDITOR, VIEWER]) {
+      expect(await accessBudget(db, userId, tree.budgetId)).toBeNull();
+      expect(await accessDraft(db, userId, tree.budgetId, tree.editorDraftId)).toBeNull();
+    }
+  });
+
+  it.each(DELETES.flatMap((scope) => [`${scope.name}x`, scope.name.toLowerCase()].map((typed) => ({ ...scope, typed }))))(
+    "refuses to delete a $what when $typed is typed",
+    async ({ remove, typed }) => {
+      const tree = await seedTree();
+      expect(await remove(tree, typed)).toBe(false);
+      expect(await countRows()).toEqual(TREE_ROWS);
+    },
+  );
 });
 
 describe("schema", () => {

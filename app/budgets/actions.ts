@@ -10,13 +10,17 @@ import {
   createDraft,
   createDraftFromVersion,
   createInvite,
+  deleteBudget,
   deleteDraft,
+  getBudget,
   parseName,
   parseNote,
   parseRole,
   parseVersionNumber,
   publishDraft,
   removeMember,
+  renameBudget,
+  renameDraft,
   revokeInvite,
   saveDraft,
   setMemberRole,
@@ -65,6 +69,48 @@ export const deleteDraftAction = async (budgetId: string, draftId: string): Prom
     await deleteDraft(db, access);
   }
   redirect(`/budgets/${budgetId}`);
+};
+
+export const renameDraftAction = async (budgetId: string, draftId: string, form: FormData): Promise<void> => {
+  const { id: userId } = await requireUser();
+  const db = getDb();
+  const access = await accessDraft(db, userId, budgetId, draftId);
+  const author = access === null ? null : authorOfDraft(access);
+  const name = parseName(form.get("name"));
+  if (author === null || name === null) {
+    return;
+  }
+  await renameDraft(db, author, name);
+  redirect(`/budgets/${budgetId}`);
+};
+
+export const renameBudgetAction = async (budgetId: string, form: FormData): Promise<void> => {
+  const { id: userId } = await requireUser();
+  const db = getDb();
+  const access = await adminAccess(db, userId, budgetId);
+  const name = parseName(form.get("name"));
+  if (access === null || name === null) {
+    return;
+  }
+  await renameBudget(db, access, name);
+  redirect(`/budgets/${budgetId}`);
+};
+
+// The form sends the name the admin typed to confirm.
+export const deleteBudgetAction = async (budgetId: string, form: FormData): Promise<void> => {
+  const { id: userId } = await requireUser();
+  const db = getDb();
+  const access = await accessBudget(db, userId, budgetId);
+  const admin = access === null ? null : adminOfBudget(access);
+  const typed = parseName(form.get("confirm"));
+  if (access === null || admin === null || typed === null) {
+    return;
+  }
+  // Read before the delete, which removes the budget's link to its building.
+  const { building } = await getBudget(db, access);
+  if (await deleteBudget(db, admin, typed)) {
+    redirect(`/buildings/${building.id}`);
+  }
 };
 
 export type SaveDraftResult = SaveResult | { status: "missing" };

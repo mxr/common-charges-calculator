@@ -1,10 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, asc, desc, eq, gt, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { EMPTY_BUDGET, normalizeBudget } from "../budget";
 import { diffBudgets } from "../diff";
 import { accessBudget, isUuid } from "./access";
 import { authUser } from "./auth-schema";
 import { budget, budgetDraft, budgetInvite, budgetMember, budgetVersion, building, project, ROLES } from "./schema";
+import type { SQL } from "drizzle-orm";
 import type { BudgetDiff } from "../diff";
 import type { Budget } from "../types";
 import type {
@@ -94,6 +95,70 @@ export const getBuilding = async (db: Db, access: BuildingAccess): Promise<Build
 export const createProject = async (db: Db, access: BuildingAdmin, name: string): Promise<string> => {
   return first(await db.insert(project).values({ buildingId: access.buildingId, name }).returning({ id: project.id })).id;
 };
+
+export const renameBuilding = async (db: Db, access: BuildingAdmin, name: string): Promise<void> => {
+  await db.update(building).set({ name }).where(eq(building.id, access.buildingId));
+};
+
+export const renameProject = async (db: Db, access: ProjectAdmin, name: string): Promise<void> => {
+  await db.update(project).set({ name }).where(eq(project.id, access.projectId));
+};
+
+export const renameBudget = async (db: Db, access: BudgetAdmin, name: string): Promise<void> => {
+  await db.update(budget).set({ name }).where(eq(budget.id, access.budgetId));
+};
+
+// A delete happens only when the typed name still matches, so a rename in another tab cannot be deleted by mistake.
+// The foreign keys cascade to everything inside: projects, budgets, drafts, versions, members, and invites.
+export const deleteBuilding = async (db: Db, access: BuildingAdmin, typedName: string): Promise<boolean> => {
+  const rows = await db
+    .delete(building)
+    .where(and(eq(building.id, access.buildingId), eq(building.name, typedName)))
+    .returning({ id: building.id });
+  return rows.length > 0;
+};
+
+export const deleteProject = async (db: Db, access: ProjectAdmin, typedName: string): Promise<boolean> => {
+  const rows = await db
+    .delete(project)
+    .where(and(eq(project.id, access.projectId), eq(project.name, typedName)))
+    .returning({ id: project.id });
+  return rows.length > 0;
+};
+
+export const deleteBudget = async (db: Db, access: BudgetAdmin, typedName: string): Promise<boolean> => {
+  const rows = await db
+    .delete(budget)
+    .where(and(eq(budget.id, access.budgetId), eq(budget.name, typedName)))
+    .returning({ id: budget.id });
+  return rows.length > 0;
+};
+
+// What a delete removes, for its confirmation. Members lose access to every budget in it.
+export type DeleteImpact = { budgets: number; drafts: number; versions: number; members: { userId: string; email: string | null }[] };
+
+const impactOf = async (db: Db, budgets: SQL): Promise<DeleteImpact> => {
+  const ids = db.select({ id: budget.id }).from(budget).where(budgets);
+  const [budgetCount, drafts, versions, members] = await Promise.all([
+    db.$count(budget, budgets),
+    db.$count(budgetDraft, inArray(budgetDraft.budgetId, ids)),
+    db.$count(budgetVersion, inArray(budgetVersion.budgetId, ids)),
+    db
+      .selectDistinct({ userId: budgetMember.userId, email: authUser.email })
+      .from(budgetMember)
+      .leftJoin(authUser, eq(authUser.id, budgetMember.userId))
+      .where(inArray(budgetMember.budgetId, ids))
+      .orderBy(asc(authUser.email), asc(budgetMember.userId)),
+  ]);
+  return { budgets: budgetCount, drafts, versions, members };
+};
+
+export const buildingImpact = (db: Db, access: BuildingAdmin): Promise<DeleteImpact> =>
+  impactOf(db, inArray(budget.projectId, db.select({ id: project.id }).from(project).where(eq(project.buildingId, access.buildingId))));
+
+export const projectImpact = (db: Db, access: ProjectAdmin): Promise<DeleteImpact> => impactOf(db, eq(budget.projectId, access.projectId));
+
+export const budgetImpact = (db: Db, access: BudgetAdmin): Promise<DeleteImpact> => impactOf(db, eq(budget.id, access.budgetId));
 
 // The latest version, or the newest draft when nothing is published yet.
 const latestContent = async (db: Db, budgetId: string): Promise<Budget | null> => {
@@ -226,6 +291,11 @@ export const saveDraft = async (db: Db, access: DraftAuthor, revision: number, c
     .where(and(eq(budgetDraft.id, access.draftId), eq(budgetDraft.revision, revision)))
     .returning({ revision: budgetDraft.revision });
   return row === undefined ? { status: "stale" } : { status: "saved", revision: row.revision };
+};
+
+// A rename leaves the revision alone, so it does not make an open editor or a publish stale.
+export const renameDraft = async (db: Db, access: DraftAuthor, name: string): Promise<void> => {
+  await db.update(budgetDraft).set({ name }).where(eq(budgetDraft.id, access.draftId));
 };
 
 export const deleteDraft = async (db: Db, access: DraftPublisher): Promise<void> => {

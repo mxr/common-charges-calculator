@@ -1,6 +1,6 @@
 # Backend plan
 
-Status: in progress. Milestone 1 shipped in v0.8.0. Milestones 2, 3, and 4 merged. Milestone 5 is in review.
+Status: in progress. Milestone 1 shipped in v0.8.0. Milestones 2, 3, 4, and 5 merged. Milestone 6 is in review.
 
 ## Goal
 
@@ -201,12 +201,12 @@ create table otp_send (
 | See drafts                                    | No     | Yes         | Yes            |
 | Create a draft                                | No     | Yes         | Yes            |
 | See another editor's draft, read-only         | No     | Yes         | Yes            |
-| Edit a draft                                  | No     | Author only | Author only    |
+| Edit or rename a draft                        | No     | Author only | Author only    |
 | Publish a draft                               | No     | Author only | Any draft      |
 | Delete a draft                                | No     | Author only | Any draft      |
 | Manage members and invites                    | No     | No          | Yes            |
 | Create, rename, or delete a project or budget | No     | No          | Yes            |
-| Delete a building                             | No     | No          | Yes            |
+| Rename or delete a building                   | No     | No          | Yes            |
 
 A member can see the name of the building and project that contain a shared budget. A member cannot see other budgets in
 that building.
@@ -357,6 +357,9 @@ Each milestone can ship alone.
    `diffBudgets`. The `neon-http` driver in `getDb` has no transactions, so publish needs the WebSocket driver from
    `@neondatabase/serverless`.
 5. **Sharing.** Roles, invite links, and permission checks for members.
+6. **Rename and delete.** The building admin renames and deletes buildings, projects, and budgets. A draft's author
+   renames the draft. A delete removes everything inside through the `on delete cascade` foreign keys, so it needs no
+   schema change.
 
 ## Verify before building
 
@@ -401,8 +404,10 @@ Each milestone can ship alone.
 1. **Should invites go by email?** Decided: no, in milestone 5. A building admin creates a link and sends it themselves,
    which avoids an email provider. Links expire after 7 days and work once.
 2. **Should other editors see a draft?** Decided: yes, read-only, in milestone 5. Only the author edits a draft.
-3. **What should deleting do?** This plan assumes a hard delete with a typed confirmation. A deleted building cannot be
-   restored by the app, and its version history goes with it.
+3. **What should deleting do?** Decided: a hard delete with a typed confirmation, in milestone 6. The admin types the
+   exact name, and the server deletes only while the name still matches. The confirmation lists the members who lose
+   access and counts the budgets, versions, and drafts that go too. The app cannot restore a deleted building, project,
+   or budget, and its version history goes with it. Versions have no name, and their notes never change.
 4. **Should a budget be able to copy from another?** Decided: yes, in milestone 3. A new budget can start as a copy of
    another budget in the same building. The copy takes that budget's latest version, or its newest draft when nothing is
    published.
