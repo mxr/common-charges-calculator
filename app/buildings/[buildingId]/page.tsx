@@ -1,11 +1,26 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ConfirmDelete } from "@/app/_components/confirm-delete";
 import { PendingSave } from "@/app/_components/pending-save";
+import { RenameForm } from "@/app/_components/rename-form";
 import { BUTTON_CLASS, INPUT_CLASS, LINK_CLASS } from "@/app/_components/styles";
 import { getDb, requireUser } from "@/app/_server/services";
-import { accessBuilding } from "@/lib/server/access";
-import { getBuilding } from "@/lib/server/store";
-import { createBudgetAction, createProjectAction } from "../actions";
+import { accessBuilding, adminOfBuilding, adminOfProject } from "@/lib/server/access";
+import { buildingImpact, getBuilding, projectImpact } from "@/lib/server/store";
+import {
+  createBudgetAction,
+  createProjectAction,
+  deleteBuildingAction,
+  deleteProjectAction,
+  renameBuildingAction,
+  renameProjectAction,
+} from "../actions";
+import type { Db } from "@/lib/server/login";
+
+const projectImpactFor = async (db: Db, userId: string, projectId: string) => {
+  const access = await adminOfProject(db, userId, projectId);
+  return access === null ? null : projectImpact(db, access);
+};
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +34,17 @@ export default async function BuildingPage({ params }: { params: Promise<{ build
   }
   const building = await getBuilding(db, access);
   const allBudgets = building.projects.flatMap((project) => project.budgets.map((budget) => ({ ...budget, project: project.name })));
+  // Only the admin sees the delete confirmations, which show what a delete removes.
+  const admin = access.isAdmin ? await adminOfBuilding(db, user.id, buildingId) : null;
+  const [impact, projects] = await Promise.all([
+    admin === null ? null : buildingImpact(db, admin),
+    Promise.all(
+      building.projects.map(async (project) => ({
+        ...project,
+        impact: admin === null ? null : await projectImpactFor(db, user.id, project.id),
+      })),
+    ),
+  ]);
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-6 px-6 py-16">
@@ -28,12 +54,29 @@ export default async function BuildingPage({ params }: { params: Promise<{ build
         </Link>
       </nav>
       <h1 className="text-2xl font-semibold">{building.name}</h1>
+      {impact === null ? null : (
+        <div className="flex flex-wrap items-center gap-4">
+          <RenameForm key={building.name} action={renameBuildingAction.bind(null, buildingId)} name={building.name} label="Building name" />
+          <ConfirmDelete action={deleteBuildingAction.bind(null, buildingId)} name={building.name} what="building" impact={impact} />
+        </div>
+      )}
       <PendingSave />
       {access.isAdmin ? null : <p className="text-sm text-[#5b5148]">This building has budgets shared with you.</p>}
       {building.projects.length === 0 ? <p className="text-sm text-[#5b5148]">This building has no projects yet.</p> : null}
-      {building.projects.map((project) => (
+      {projects.map((project) => (
         <section key={project.id} className="flex flex-col gap-3 rounded-2xl border border-black/10 p-4">
           <h2 className="text-lg font-semibold">{project.name}</h2>
+          {project.impact === null ? null : (
+            <div className="flex flex-wrap items-center gap-4">
+              <RenameForm key={project.name} action={renameProjectAction.bind(null, project.id)} name={project.name} label="Project name" />
+              <ConfirmDelete
+                action={deleteProjectAction.bind(null, project.id)}
+                name={project.name}
+                what="project"
+                impact={project.impact}
+              />
+            </div>
+          )}
           {project.budgets.length === 0 ? (
             <p className="text-sm text-[#5b5148]">No budgets yet.</p>
           ) : (
