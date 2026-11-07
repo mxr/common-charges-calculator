@@ -1,12 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BudgetDiffView } from "@/app/_components/budget-diff";
+import { ConfirmDelete } from "@/app/_components/confirm-delete";
 import { PendingSave } from "@/app/_components/pending-save";
+import { RenameForm } from "@/app/_components/rename-form";
 import { BUTTON_CLASS, INPUT_CLASS, LINK_CLASS } from "@/app/_components/styles";
 import { getDb, requireUser } from "@/app/_server/services";
 import { accessBudget, adminOfBudget, editorOfBudget } from "@/lib/server/access";
-import { getBudget, getChangelog, listDrafts, listInvites, listMembers } from "@/lib/server/store";
-import { createDraftAction, removeMemberAction, revokeInviteAction, setMemberRoleAction } from "../actions";
+import { budgetImpact, getBudget, getChangelog, listDrafts, listInvites, listMembers } from "@/lib/server/store";
+import {
+  createDraftAction,
+  deleteBudgetAction,
+  removeMemberAction,
+  renameBudgetAction,
+  renameDraftAction,
+  revokeInviteAction,
+  setMemberRoleAction,
+} from "../actions";
 import { CreateInvite } from "./create-invite";
 import { DeleteDraftButton } from "./delete-draft-button";
 import { PublishButton } from "./publish-button";
@@ -25,12 +35,13 @@ export default async function BudgetPage({ params }: { params: Promise<{ budgetI
   }
   const editor = editorOfBudget(access);
   const admin = adminOfBudget(access);
-  const [budget, changelog, drafts, members, invites] = await Promise.all([
+  const [budget, changelog, drafts, members, invites, impact] = await Promise.all([
     getBudget(db, access),
     getChangelog(db, access),
     editor === null ? null : listDrafts(db, editor),
     admin === null ? null : listMembers(db, admin),
     admin === null ? null : listInvites(db, admin, new Date()),
+    admin === null ? null : budgetImpact(db, admin),
   ]);
 
   return (
@@ -47,6 +58,12 @@ export default async function BudgetPage({ params }: { params: Promise<{ budgetI
         <span>{budget.project.name}</span>
       </nav>
       <h1 className="text-2xl font-semibold">{budget.name}</h1>
+      {impact === null ? null : (
+        <div className="flex flex-wrap items-center gap-4">
+          <RenameForm key={budget.name} action={renameBudgetAction.bind(null, budgetId)} name={budget.name} label="Budget name" />
+          <ConfirmDelete action={deleteBudgetAction.bind(null, budgetId)} name={budget.name} what="budget" impact={impact} />
+        </div>
+      )}
       {editor === null ? (
         <p className="text-sm text-[#5b5148]">You can view published versions of this budget.</p>
       ) : (
@@ -78,6 +95,14 @@ export default async function BudgetPage({ params }: { params: Promise<{ budgetI
                     {draft.baseVersion === 0 ? "not from a version" : `from version ${draft.baseVersion}`}, saved{" "}
                     {formatDate(draft.updatedAt)} UTC
                   </span>
+                  {draft.authorId === user.id ? (
+                    <RenameForm
+                      key={draft.name}
+                      action={renameDraftAction.bind(null, budgetId, draft.id)}
+                      name={draft.name}
+                      label="Draft name"
+                    />
+                  ) : null}
                   {draft.authorId === user.id || admin !== null ? (
                     <>
                       <PublishButton budgetId={budgetId} draftId={draft.id} revision={draft.revision} />
