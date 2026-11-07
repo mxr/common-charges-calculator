@@ -1,6 +1,6 @@
 # Backend plan
 
-Status: in progress. Milestone 1 shipped in v0.8.0. Milestones 2, 3, 4, and 5 merged. Milestone 6 is in review.
+Status: in progress. Milestone 1 shipped in v0.8.0. Milestones 2, 3, 4, 5, and 6 merged.
 
 ## Goal
 
@@ -366,19 +366,30 @@ Each milestone can ship alone.
 - [x] The Neon project shows the free plan through the Vercel integration. Vercel lists the installation as `Free`.
 - [x] `NEON_AUTH_BASE_URL` is set in the Vercel project for Production and Preview. This shows Managed Better Auth is
   on.
-- [ ] Confirm the current server API in `@neon/auth`. The package was renamed, and some Neon docs use the old name.
+- [x] Confirm the current server API in `@neon/auth`. The package was renamed, and some Neon docs use the old name.
+  Checked against the installed 0.8.2. `createNeonAuth` from `@neon/auth/next/server` types `getSession`, `signOut`,
+  `signUp.email`, and `middleware`. The types leave out `emailOtp.sendVerificationOtp` and `signIn.emailOtp`, but
+  `API_ENDPOINTS` in `dist/server.js` maps both, so `getEmailOtpAuth` keeps a cast for those two methods only.
 - [x] Send one real login for a person who has no account yet. Neon generated a code but did not call `send.otp`, so the
   action now creates the account first, gated by `user.before_create`.
 - [x] Confirm that `user.before_create` sends `user.email`, and that a first-time login works end to end. Verified on
   the preview: the account was created, one code was sent through Gmail, and the login verified the email.
-- [ ] Confirm the Neon Console shows the Tables page on this plan, and whether it shows the `neon_auth` schema.
-- [ ] Confirm Gmail's daily send limit, then set the daily limit below it.
-- [ ] Send test codes to Gmail, Outlook, and Yahoo addresses and check that they reach the inbox.
+- [x] Confirm the Neon Console shows the Tables page on this plan, and whether it shows the `neon_auth` schema. On the
+  free plan, the Tables page loads, and its schema list includes `neon_auth` with the `user` table.
+- [x] Confirm Gmail's daily send limit, then set the daily limit below it. Gmail allows 500 emails a day
+  ([Limits for sending & getting mail](https://support.google.com/mail/answer/22839)). `MAX_SENDS_PER_DAY` in
+  `lib/server/login.ts` is 300.
+- [x] Send test codes to Gmail, Outlook, and Yahoo addresses and check that they reach the inbox. A code reached a Gmail
+  address. Outlook and Yahoo were not tested, by decision.
 - [x] Confirm the `siteverify` fields in Cloudflare's own docs. The response includes `success`, `hostname`, and
   `action`. A token works once, expires after 300 seconds, and has at most 2048 characters.
-- [ ] Confirm Turnstile's free limits in Cloudflare's own docs. Third-party sources disagree.
-- [ ] Measure the size of a real budget as JSON. The 1 GB limit holds about 20,000 snapshots if one is 50 KB. That size
-  is an assumption.
+- [x] Confirm Turnstile's free limits in Cloudflare's own docs. Third-party sources disagree. The free plan allows 20
+  widgets per account and 10 hostnames per widget, with unlimited challenges
+  ([Turnstile plans](https://developers.cloudflare.com/turnstile/plans/)).
+- [x] Measure the size of a real budget as JSON. `DEFAULT_BUDGET` is 5 KB as JSON and 6.4 KB as `jsonb`. A large
+  building with 250 units, 200 owners, 80 expenses, and 20 policies is 73 KB as JSON and 88 KB as `jsonb`. Postgres
+  compresses large values on disk, but the estimate ignores that. At 88 KB, the free plan's 1 GB per project
+  ([Neon plans](https://neon.com/docs/introduction/plans)) holds about 11,000 drafts and versions.
 
 ## Setup you do by hand
 

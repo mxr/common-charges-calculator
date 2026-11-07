@@ -30,11 +30,11 @@ export const getAuth = once(() =>
   }),
 );
 
-// The server API has these methods at runtime, but its types leave them out.
+// The server API has these methods at runtime, but the @neon/auth 0.8.2 types leave them out: `emailOtp` is `unknown`
+// and `signIn` has no `emailOtp`.
 type EmailOtpApi = {
   emailOtp: { sendVerificationOtp: (input: { email: string; type: "sign-in" }) => Promise<{ error: unknown }> };
   signIn: { emailOtp: (input: { email: string; otp: string }) => Promise<{ error: unknown }> };
-  signUp: { email: (input: { email: string; name: string; password: string }) => Promise<{ error: { code?: string } | null }> };
 };
 
 export const getEmailOtpAuth = (): EmailOtpApi => getAuth() as unknown as EmailOtpApi;

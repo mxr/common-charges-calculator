@@ -3,7 +3,7 @@
 import { randomBytes } from "node:crypto";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { getDb, getEmailOtpAuth, getTurnstileSecret } from "@/app/_server/services";
+import { getAuth, getDb, getEmailOtpAuth, getTurnstileSecret } from "@/app/_server/services";
 import { normalizeEmail, openGate, verifyTurnstile } from "@/lib/server/login";
 import type { ExpectedChallenge, GateResult } from "@/lib/server/login";
 
@@ -35,14 +35,13 @@ export const startEmailLogin = async (rawEmail: string, token: string): Promise<
 
   // Neon sends codes only to existing accounts. Nobody learns this password, and the branch requires a
   // verified email before a password login, so the account can only be used through a code.
-  const auth = getEmailOtpAuth();
-  const signUp = await auth.signUp.email({ email, name: email, password: randomBytes(32).toString("base64url") });
+  const signUp = await getAuth().signUp.email({ email, name: email, password: randomBytes(32).toString("base64url") });
   if (signUp.error && signUp.error.code !== "USER_ALREADY_EXISTS") {
     console.error("sign-up failed", signUp.error);
     return { error: SEND_ERROR };
   }
 
-  const { error } = await auth.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+  const { error } = await getEmailOtpAuth().emailOtp.sendVerificationOtp({ email, type: "sign-in" });
   return error ? { error: SEND_ERROR } : null;
 };
 
