@@ -39,5 +39,5 @@
     "test:watch": "vitest",
     "vercel-build": "{ [ \"$VERCEL_ENV\" != preview ] || npm run db:migrate; } && npm run build"
   },
-  "version": "0.8.0"
+  "version": "1.0.0"
 }
