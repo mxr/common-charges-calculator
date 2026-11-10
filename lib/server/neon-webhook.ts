@@ -1,5 +1,4 @@
 import { createPublicKey, verify } from "node:crypto";
-import type { JsonWebKey } from "node:crypto";
 
 const MAX_TIMESTAMP_AGE_MS = 5 * 60_000;
 
