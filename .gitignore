@@ -22,7 +22,7 @@
 /out/
 !/postcss.config.mjs
 !/tsconfig.json
-!/vercel.json
+!/vercel.ts
 !/vitest.config.mts
 next-env.d.ts
 node_modules/
