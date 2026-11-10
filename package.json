@@ -13,7 +13,7 @@
     "@electric-sql/pglite": "^0.5.14",
     "@tailwindcss/postcss": "^4",
     "@tsconfig/strictest": "^2.0.8",
-    "@types/node": "^24",
+    "@types/node": "^26.0.0",
     "@types/nodemailer": "^8.0.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
