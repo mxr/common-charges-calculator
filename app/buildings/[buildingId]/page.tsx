@@ -48,7 +48,7 @@ export default async function BuildingPage({ params }: { params: Promise<{ build
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-6 px-6 py-16">
-      <nav className="text-sm text-[#5b5148]">
+      <nav className="text-sm text-ink-muted">
         <Link href="/buildings" className={LINK_CLASS}>
           Buildings
         </Link>
@@ -61,10 +61,10 @@ export default async function BuildingPage({ params }: { params: Promise<{ build
         </div>
       )}
       <PendingSave />
-      {access.isAdmin ? null : <p className="text-sm text-[#5b5148]">This building has budgets shared with you.</p>}
-      {building.projects.length === 0 ? <p className="text-sm text-[#5b5148]">This building has no projects yet.</p> : null}
+      {access.isAdmin ? null : <p className="text-sm text-ink-muted">This building has budgets shared with you.</p>}
+      {building.projects.length === 0 ? <p className="text-sm text-ink-muted">This building has no projects yet.</p> : null}
       {projects.map((project) => (
-        <section key={project.id} className="flex flex-col gap-3 rounded-2xl border border-black/10 p-4">
+        <section key={project.id} className="flex flex-col gap-3 rounded-2xl border border-line p-4">
           <h2 className="text-lg font-semibold">{project.name}</h2>
           {project.impact === null ? null : (
             <div className="flex flex-wrap items-center gap-4">
@@ -78,7 +78,7 @@ export default async function BuildingPage({ params }: { params: Promise<{ build
             </div>
           )}
           {project.budgets.length === 0 ? (
-            <p className="text-sm text-[#5b5148]">No budgets yet.</p>
+            <p className="text-sm text-ink-muted">No budgets yet.</p>
           ) : (
             <ul className="flex flex-col gap-1 text-sm">
               {project.budgets.map((budget) => (

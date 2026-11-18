@@ -35,22 +35,22 @@ import type { UnitCharge } from "../../lib/allocate";
 import type { ExpenseSortKey, OwnerSortKey, SortState, UnitFilter, UnitSortKey, UnitTypeSortKey } from "../../lib/sort";
 import type { Budget, Expense, Owner, Unit, UnitClassification, UnitType } from "../../lib/types";
 
-const card = "rounded-3xl border border-[#e7d7c8] bg-white/80 p-6 shadow-[0_20px_60px_rgba(120,96,77,0.12)] backdrop-blur";
-const sectionTitle = "text-2xl font-semibold text-[#181716]";
-const sectionHint = "text-sm text-[#5b5148]";
+const card = "rounded-3xl border border-line bg-surface/80 p-6 shadow-[0_20px_60px_rgba(120,96,77,0.12)] backdrop-blur";
+const sectionTitle = "text-2xl font-semibold text-foreground";
+const sectionHint = "text-sm text-ink-muted";
 const fieldBase =
-  "h-10 rounded-xl border border-[#e6d7c7] bg-[#fefbf7] px-3 text-sm font-medium text-[#1d1b18] outline-none transition focus:border-[#c9a888] focus:ring-2 focus:ring-[#edc9a6]/60";
+  "h-10 rounded-xl border border-line bg-surface-soft px-3 text-sm font-medium text-foreground outline-none transition focus:border-line-focus focus:ring-2 focus:ring-ring/60";
 const field = `${fieldBase} w-full`;
 // Server components import it from ./styles, because a value from a client module reaches them as a reference.
 export const pillButton = PILL_BUTTON_CLASS;
 const solidButton =
-  "inline-flex items-center gap-2 rounded-full bg-[#1b1a17] px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(30,27,23,0.2)] transition hover:-translate-y-0.5 hover:bg-[#2d2a25]";
+  "inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-[0_10px_30px_rgba(30,27,23,0.2)] transition hover:-translate-y-0.5 hover:bg-primary-hover";
 const dangerButton =
-  "inline-flex items-center gap-2 rounded-full border border-[#c0443c] px-4 py-2 text-sm font-semibold text-[#c0443c] transition hover:-translate-y-0.5 hover:bg-[#fbeae9]";
-const groupHeading = "text-xs font-semibold uppercase tracking-[0.25em] text-[#8c7b6c]";
-const breakdownSubheading = "pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9a8a7b]";
+  "inline-flex items-center gap-2 rounded-full border border-danger px-4 py-2 text-sm font-semibold text-danger transition hover:-translate-y-0.5 hover:bg-danger-soft";
+const groupHeading = "text-xs font-semibold uppercase tracking-[0.25em] text-ink-subtle";
+const breakdownSubheading = "pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint";
 const iconButton =
-  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#d8c7b5] text-[#5b5148] transition hover:-translate-y-0.5 hover:bg-[#f1e7db]";
+  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line-strong text-ink-muted transition hover:-translate-y-0.5 hover:bg-muted";
 
 const iconProps = {
   viewBox: "0 0 24 24",
@@ -559,7 +559,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
         {readOnly ? null : (
           <button
             type="button"
-            className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+            className={`${iconButton} border-danger-line text-danger hover:border-danger-line-strong`}
             aria-label="Remove unit"
             onClick={() => patch((draft) => ({ ...draft, units: draft.units.filter((u) => u.id !== unit.id) }))}
           >
@@ -573,7 +573,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
   const renderAssignmentRow = (unit: Unit) => {
     return (
       <div key={unit.id} className="flex items-center gap-3">
-        <span className="w-20 shrink-0 text-sm font-medium text-[#1d1b18]">{unit.label || "—"}</span>
+        <span className="w-20 shrink-0 text-sm font-medium text-foreground">{unit.label || "—"}</span>
         <select
           className={`${field} max-w-xs flex-1`}
           value={unit.ownerId}
@@ -690,15 +690,15 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
   const sortedPerOwner = sortOwnersByPrimaryUnit(result.perOwner, budget.units, classByType);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#f7f1e8]">
-      <div className="pointer-events-none absolute -left-24 top-10 h-64 w-64 rounded-full bg-[#f0c9a7]/60 blur-3xl" />
-      <div className="pointer-events-none absolute -right-20 top-24 h-80 w-80 rounded-full bg-[#b6d6cf]/60 blur-3xl" />
+    <div className="relative min-h-screen overflow-hidden bg-background">
+      <div className="pointer-events-none absolute -left-24 top-10 h-64 w-64 rounded-full bg-glow-warm/60 blur-3xl" />
+      <div className="pointer-events-none absolute -right-20 top-24 h-80 w-80 rounded-full bg-glow-cool/60 blur-3xl" />
 
       <main className="relative mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-16 sm:px-10 lg:px-12">
         <header className="flex flex-col gap-5">
-          <div className="text-sm uppercase tracking-[0.3em] text-[#7b6a5b]">Common Charges Calculator</div>
-          <h1 className="text-4xl font-semibold tracking-tight text-[#161515] sm:text-5xl">Split building expenses fairly.</h1>
-          <p className="max-w-3xl text-base text-[#4a4037] sm:text-lg">
+          <div className="text-sm uppercase tracking-[0.3em] text-ink-subtle">Common Charges Calculator</div>
+          <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">Split building expenses fairly.</h1>
+          <p className="max-w-3xl text-base text-ink-soft sm:text-lg">
             {intro ?? (
               <>
                 Define owners, units, expenses, and the policies that decide how each expense is split. Charges update instantly. Everything
@@ -729,7 +729,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
         </header>
 
         {warnings.length > 0 ? (
-          <section className="rounded-2xl border border-[#eccfa3] bg-[#fff6e6] p-4 text-sm text-[#7a5a23]">
+          <section className="rounded-2xl border border-warning-line bg-warning-soft p-4 text-sm text-warning">
             <p className="text-xs font-semibold uppercase tracking-[0.2em]">Warnings</p>
             <ul className="mt-2 list-disc pl-5">
               {warnings.map((warning) => (
@@ -751,8 +751,8 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
               type="button"
               className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
                 activeTab === key
-                  ? "border-[#1b1a17] bg-[#1b1a17] text-white"
-                  : "border-[#d8c7b5] text-[#5b5148] hover:-translate-y-0.5 hover:bg-[#f1e7db]"
+                  ? "border-primary bg-primary text-on-primary"
+                  : "border-line-strong text-ink-muted hover:-translate-y-0.5 hover:bg-muted"
               }`}
               onClick={() => setActiveTab(key)}
             >
@@ -771,22 +771,22 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                   className={`${sectionTitle} flex items-center gap-2`}
                   onClick={() => setCollapsedOwners((value) => !value)}
                 >
-                  <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedOwners ? "▸" : "▾"}</span>
+                  <span className="text-2xl leading-none text-ink-subtle">{collapsedOwners ? "▸" : "▾"}</span>
                   Owners
-                  <span className="text-sm font-normal text-[#9a8a7b]">({budget.owners.length})</span>
+                  <span className="text-sm font-normal text-ink-faint">({budget.owners.length})</span>
                 </button>
                 <div className="flex flex-wrap items-center gap-2">
                   {budget.owners.length > 1 ? (
                     <div className="flex items-center gap-2">
                       <span className={groupHeading}>Sort by</span>
-                      <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                      <div className="flex overflow-hidden rounded-full border border-line-strong text-xs font-semibold">
                         {(["name", "currentMonthly"] as OwnerSortKey[]).map((key) => {
                           const active = ownerSort?.key === key;
                           return (
                             <button
                               key={key}
                               type="button"
-                              className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                              className={`px-3 py-1.5 ${active ? "bg-primary text-on-primary" : "text-ink-muted"}`}
                               aria-label={`Sort owners by ${OWNER_SORT_LABELS[key].toLowerCase()}${active ? ` (${ownerSort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
                               onClick={() => cycleOwnerSort(key)}
                             >
@@ -823,7 +823,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                     <Locked locked={readOnly}>
                       <table className="w-full border-collapse text-sm">
                         <thead>
-                          <tr className="border-b border-[#eadccb] text-left text-xs font-semibold uppercase tracking-[0.2em] text-[#8c7b6c]">
+                          <tr className="border-b border-line text-left text-xs font-semibold uppercase tracking-[0.2em] text-ink-subtle">
                             <th className="py-2 pr-4">Owner name</th>
                             <th className="py-2 pr-4">Current $/mo</th>
                             <th className="py-2 pl-4 text-right">Actions</th>
@@ -832,7 +832,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                         <tbody>
                           {applyOrder(budget.owners, ownerOrder, (owner) => owner.id).map((owner, index) => {
                             return (
-                              <tr key={owner.id} className="border-b border-[#f2e8dd]">
+                              <tr key={owner.id} className="border-b border-line-soft">
                                 <td className="py-2 pr-4 align-middle">
                                   <TextField
                                     id={`owner-name-${owner.id}`}
@@ -861,7 +861,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                 </td>
                                 <td className="py-2 pl-4 align-middle">
                                   <div className="flex items-center justify-end gap-2">
-                                    <label className="flex items-center gap-1 whitespace-nowrap text-xs text-[#4a4037]">
+                                    <label className="flex items-center gap-1 whitespace-nowrap text-xs text-ink-soft">
                                       <input
                                         type="radio"
                                         name="board-owner"
@@ -880,7 +880,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                     {readOnly ? null : (
                                       <button
                                         type="button"
-                                        className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                        className={`${iconButton} border-danger-line text-danger hover:border-danger-line-strong`}
                                         aria-label="Remove owner"
                                         onClick={() =>
                                           patch((draft) => ({ ...draft, owners: draft.owners.filter((o) => o.id !== owner.id) }))
@@ -898,7 +898,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                       </table>
                     </Locked>
                   </div>
-                  <div className="mt-3 flex items-center justify-between border-t border-[#eadccb] pt-3 text-sm font-semibold text-[#181716]">
+                  <div className="mt-3 flex items-center justify-between border-t border-line pt-3 text-sm font-semibold text-foreground">
                     <span>Total income</span>
                     <span>{formatCurrency(budget.owners.reduce((sum, owner) => sum + owner.currentMonthly * 12, 0))}/yr</span>
                   </div>
@@ -914,22 +914,22 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                   className={`${sectionTitle} flex items-center gap-2`}
                   onClick={() => setCollapsedUnitTypes((value) => !value)}
                 >
-                  <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedUnitTypes ? "▸" : "▾"}</span>
+                  <span className="text-2xl leading-none text-ink-subtle">{collapsedUnitTypes ? "▸" : "▾"}</span>
                   Unit types
-                  <span className="text-sm font-normal text-[#9a8a7b]">({budget.unitTypes.length})</span>
+                  <span className="text-sm font-normal text-ink-faint">({budget.unitTypes.length})</span>
                 </button>
                 <div className="flex flex-wrap items-center gap-2">
                   {budget.unitTypes.length > 1 ? (
                     <div className="flex items-center gap-2">
                       <span className={groupHeading}>Sort by</span>
-                      <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                      <div className="flex overflow-hidden rounded-full border border-line-strong text-xs font-semibold">
                         {(["name", "classification"] as UnitTypeSortKey[]).map((key) => {
                           const active = unitTypeSort?.key === key;
                           return (
                             <button
                               key={key}
                               type="button"
-                              className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                              className={`px-3 py-1.5 ${active ? "bg-primary text-on-primary" : "text-ink-muted"}`}
                               aria-label={`Sort unit types by ${UNIT_TYPE_SORT_LABELS[key].toLowerCase()}${active ? ` (${unitTypeSort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
                               onClick={() => cycleUnitTypeSort(key)}
                             >
@@ -966,7 +966,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                     <Locked locked={readOnly}>
                       <table className="w-full border-collapse text-sm">
                         <thead>
-                          <tr className="border-b border-[#eadccb] text-left text-xs font-semibold uppercase tracking-[0.2em] text-[#8c7b6c]">
+                          <tr className="border-b border-line text-left text-xs font-semibold uppercase tracking-[0.2em] text-ink-subtle">
                             <th className="py-2 pr-4">Type name</th>
                             <th className="py-2 pr-4">Classification</th>
                             <th className="py-2 pl-4 text-right">Actions</th>
@@ -974,7 +974,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                         </thead>
                         <tbody>
                           {applyOrder(budget.unitTypes, unitTypeOrder, (type) => type.name).map((type, index) => (
-                            <tr key={type.name} className="border-b border-[#f2e8dd]">
+                            <tr key={type.name} className="border-b border-line-soft">
                               <td className="py-2 pr-4 align-middle">
                                 <TextField
                                   id={`unittype-name-${index}`}
@@ -1009,7 +1009,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                   {readOnly ? null : (
                                     <button
                                       type="button"
-                                      className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                      className={`${iconButton} border-danger-line text-danger hover:border-danger-line-strong`}
                                       aria-label="Remove unit type"
                                       onClick={() =>
                                         patch((draft) => ({ ...draft, unitTypes: draft.unitTypes.filter((t) => t.name !== type.name) }))
@@ -1025,7 +1025,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                         </tbody>
                       </table>
                     </Locked>
-                    {budget.unitTypes.length === 0 ? <p className="mt-3 text-sm italic text-[#9a8a7b]">No unit types.</p> : null}
+                    {budget.unitTypes.length === 0 ? <p className="mt-3 text-sm italic text-ink-faint">No unit types.</p> : null}
                   </div>
                 </>
               )}
@@ -1039,9 +1039,9 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                   className={`${sectionTitle} flex items-center gap-2`}
                   onClick={() => setCollapsedUnits((value) => !value)}
                 >
-                  <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedUnits ? "▸" : "▾"}</span>
+                  <span className="text-2xl leading-none text-ink-subtle">{collapsedUnits ? "▸" : "▾"}</span>
                   Units
-                  <span className="text-sm font-normal text-[#9a8a7b]">({budget.units.length})</span>
+                  <span className="text-sm font-normal text-ink-faint">({budget.units.length})</span>
                 </button>
                 <div className="flex flex-wrap items-center gap-2">
                   {readOnly ? null : (
@@ -1099,24 +1099,24 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                 <>
                   <p className={`${sectionHint} mt-1`}>
                     Common interests total{" "}
-                    <span className={Math.abs(ciSum - 100) <= 0.01 ? "font-semibold text-[#3f7a52]" : "font-semibold text-[#b44b43]"}>
+                    <span className={Math.abs(ciSum - 100) <= 0.01 ? "font-semibold text-success" : "font-semibold text-danger"}>
                       {formatCi(ciSum)}%
                     </span>{" "}
                     (should be as close to 100% as possible). Columns: label, type, common interest %, tags (comma separated). Grouped by
                     unit type. Edit owner assignments in the Assignments section below.
                     {Math.abs(ciSum - 100) > 0.01 ? (
-                      <span className="font-semibold text-[#b44b43]"> Off from 100% - double-check the Unit definitions.</span>
+                      <span className="font-semibold text-danger"> Off from 100% - double-check the Unit definitions.</span>
                     ) : null}
                   </p>
                   <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3">
                     <div className="flex items-center gap-2">
                       <span className={groupHeading}>Filter</span>
-                      <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                      <div className="flex overflow-hidden rounded-full border border-line-strong text-xs font-semibold">
                         {UNIT_FILTERS.map((value) => (
                           <button
                             key={value}
                             type="button"
-                            className={`px-3 py-1.5 ${unitFilter === value ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                            className={`px-3 py-1.5 ${unitFilter === value ? "bg-primary text-on-primary" : "text-ink-muted"}`}
                             onClick={() => setUnitFilter(value)}
                           >
                             {UNIT_FILTER_LABELS[value]}
@@ -1127,10 +1127,10 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                     {budget.unitTypes.length > 0 ? (
                       <div className="flex items-center gap-2">
                         <span className={groupHeading}>Types</span>
-                        <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                        <div className="flex overflow-hidden rounded-full border border-line-strong text-xs font-semibold">
                           <button
                             type="button"
-                            className={`px-3 py-1.5 ${unitTypeFilter.size === 0 ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                            className={`px-3 py-1.5 ${unitTypeFilter.size === 0 ? "bg-primary text-on-primary" : "text-ink-muted"}`}
                             onClick={() => setUnitTypeFilter(new Set())}
                           >
                             All
@@ -1142,7 +1142,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                 key={type.name}
                                 type="button"
                                 aria-pressed={active}
-                                className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                                className={`px-3 py-1.5 ${active ? "bg-primary text-on-primary" : "text-ink-muted"}`}
                                 onClick={() =>
                                   setUnitTypeFilter((prev) => {
                                     const next = new Set(prev);
@@ -1164,14 +1164,14 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                     ) : null}
                     <div className="flex items-center gap-2">
                       <span className={groupHeading}>Sort by</span>
-                      <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                      <div className="flex overflow-hidden rounded-full border border-line-strong text-xs font-semibold">
                         {(["label", "ci"] as UnitSortKey[]).map((key) => {
                           const active = unitSort?.key === key;
                           return (
                             <button
                               key={key}
                               type="button"
-                              className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                              className={`px-3 py-1.5 ${active ? "bg-primary text-on-primary" : "text-ink-muted"}`}
                               aria-label={`Sort units by ${UNIT_SORT_LABELS[key].toLowerCase()}${active ? ` (${unitSort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
                               onClick={() => cycleUnitSort(key)}
                             >
@@ -1191,18 +1191,18 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                         <div key={group.key} className="flex flex-col gap-2">
                           <div className="flex items-center justify-between">
                             <button type="button" className="flex items-center gap-2" onClick={() => toggleType(group.key)}>
-                              <span className="text-lg leading-none text-[#8c7b6c]">{collapsed ? "▸" : "▾"}</span>
+                              <span className="text-lg leading-none text-ink-subtle">{collapsed ? "▸" : "▾"}</span>
                               <span className={groupHeading}>{group.label || "—"}</span>
                             </button>
                             <div className="flex items-center gap-2">
-                              <span className="rounded-full border border-[#e6d7c7] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#8c7b6c]">
+                              <span className="rounded-full border border-line bg-surface px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-ink-subtle">
                                 {UNIT_CLASSIFICATION_LABELS[group.classification]}
                               </span>
-                              <span className="text-xs text-[#9a8a7b]">{formatCi(groupCi)}%</span>
+                              <span className="text-xs text-ink-faint">{formatCi(groupCi)}%</span>
                             </div>
                           </div>
                           {collapsed ? null : group.units.length === 0 ? (
-                            <p className="text-sm italic text-[#9a8a7b]">No units.</p>
+                            <p className="text-sm italic text-ink-faint">No units.</p>
                           ) : (
                             <div className="space-y-2 lg:columns-2 lg:gap-x-6 lg:space-y-0">
                               {group.units.map((unit) => (
@@ -1228,9 +1228,9 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                   className={`${sectionTitle} flex items-center gap-2`}
                   onClick={() => setCollapsedAssignments((value) => !value)}
                 >
-                  <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedAssignments ? "▸" : "▾"}</span>
+                  <span className="text-2xl leading-none text-ink-subtle">{collapsedAssignments ? "▸" : "▾"}</span>
                   Assignments
-                  <span className="text-sm font-normal text-[#9a8a7b]">({budget.units.length})</span>
+                  <span className="text-sm font-normal text-ink-faint">({budget.units.length})</span>
                 </button>
                 {!collapsedAssignments && assignmentGroupKeys.length > 0 ? (
                   <button type="button" className={pillButton} onClick={toggleAllAssignments}>
@@ -1244,17 +1244,17 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                   <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3">
                     <div className="flex items-center gap-2">
                       <span className={groupHeading}>Grouping</span>
-                      <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                      <div className="flex overflow-hidden rounded-full border border-line-strong text-xs font-semibold">
                         <button
                           type="button"
-                          className={`px-3 py-1.5 ${assignmentView === "type" ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                          className={`px-3 py-1.5 ${assignmentView === "type" ? "bg-primary text-on-primary" : "text-ink-muted"}`}
                           onClick={() => setAssignmentView("type")}
                         >
                           By type
                         </button>
                         <button
                           type="button"
-                          className={`px-3 py-1.5 ${assignmentView === "owner" ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                          className={`px-3 py-1.5 ${assignmentView === "owner" ? "bg-primary text-on-primary" : "text-ink-muted"}`}
                           onClick={() => setAssignmentView("owner")}
                         >
                           By owner
@@ -1263,12 +1263,12 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={groupHeading}>Filter</span>
-                      <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                      <div className="flex overflow-hidden rounded-full border border-line-strong text-xs font-semibold">
                         {UNIT_FILTERS.map((value) => (
                           <button
                             key={value}
                             type="button"
-                            className={`px-3 py-1.5 ${unitFilter === value ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                            className={`px-3 py-1.5 ${unitFilter === value ? "bg-primary text-on-primary" : "text-ink-muted"}`}
                             onClick={() => setUnitFilter(value)}
                           >
                             {UNIT_FILTER_LABELS[value]}
@@ -1279,10 +1279,10 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                     {budget.unitTypes.length > 0 ? (
                       <div className="flex items-center gap-2">
                         <span className={groupHeading}>Types</span>
-                        <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                        <div className="flex overflow-hidden rounded-full border border-line-strong text-xs font-semibold">
                           <button
                             type="button"
-                            className={`px-3 py-1.5 ${unitTypeFilter.size === 0 ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                            className={`px-3 py-1.5 ${unitTypeFilter.size === 0 ? "bg-primary text-on-primary" : "text-ink-muted"}`}
                             onClick={() => setUnitTypeFilter(new Set())}
                           >
                             All
@@ -1294,7 +1294,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                 key={type.name}
                                 type="button"
                                 aria-pressed={active}
-                                className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                                className={`px-3 py-1.5 ${active ? "bg-primary text-on-primary" : "text-ink-muted"}`}
                                 onClick={() =>
                                   setUnitTypeFilter((prev) => {
                                     const next = new Set(prev);
@@ -1316,14 +1316,14 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                     ) : null}
                     <div className="flex items-center gap-2">
                       <span className={groupHeading}>Sort by</span>
-                      <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                      <div className="flex overflow-hidden rounded-full border border-line-strong text-xs font-semibold">
                         {(["label", "ci"] as UnitSortKey[]).map((key) => {
                           const active = unitSort?.key === key;
                           return (
                             <button
                               key={key}
                               type="button"
-                              className={`px-3 py-1.5 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                              className={`px-3 py-1.5 ${active ? "bg-primary text-on-primary" : "text-ink-muted"}`}
                               aria-label={`Sort units by ${UNIT_SORT_LABELS[key].toLowerCase()}${active ? ` (${unitSort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
                               onClick={() => cycleUnitSort(key)}
                             >
@@ -1343,18 +1343,18 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                           <div key={group.key} className="flex flex-col gap-2">
                             <div className="flex items-center justify-between">
                               <button type="button" className="flex items-center gap-2" onClick={() => toggleType(group.key)}>
-                                <span className="text-lg leading-none text-[#8c7b6c]">{collapsed ? "▸" : "▾"}</span>
+                                <span className="text-lg leading-none text-ink-subtle">{collapsed ? "▸" : "▾"}</span>
                                 <span className={groupHeading}>{group.label || "—"}</span>
                               </button>
                               <div className="flex items-center gap-2">
-                                <span className="rounded-full border border-[#e6d7c7] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#8c7b6c]">
+                                <span className="rounded-full border border-line bg-surface px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-ink-subtle">
                                   {UNIT_CLASSIFICATION_LABELS[group.classification]}
                                 </span>
-                                <span className="text-xs text-[#9a8a7b]">{group.units.length}</span>
+                                <span className="text-xs text-ink-faint">{group.units.length}</span>
                               </div>
                             </div>
                             {collapsed ? null : group.units.length === 0 ? (
-                              <p className="text-sm italic text-[#9a8a7b]">No units.</p>
+                              <p className="text-sm italic text-ink-faint">No units.</p>
                             ) : (
                               <div className="space-y-2 lg:columns-2 lg:gap-x-6 lg:space-y-0">
                                 {group.units.map((unit) => (
@@ -1377,10 +1377,10 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                           <div key={group.key} className="flex flex-col gap-2">
                             <div className="flex items-center justify-between">
                               <button type="button" className="flex items-center gap-2" onClick={() => toggleType(group.key)}>
-                                <span className="text-lg leading-none text-[#8c7b6c]">{collapsed ? "▸" : "▾"}</span>
+                                <span className="text-lg leading-none text-ink-subtle">{collapsed ? "▸" : "▾"}</span>
                                 {group.primaryUnits.length > 0 ? (
                                   <span
-                                    className="rounded-full border border-[#e6d7c7] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#8c7b6c]"
+                                    className="rounded-full border border-line bg-surface px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-ink-subtle"
                                     title="Primary units"
                                   >
                                     {primaryLabels}
@@ -1388,22 +1388,22 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                 ) : null}
                                 <span className={groupHeading}>{group.owner.name || "—"}</span>
                               </button>
-                              <span className="text-xs text-[#9a8a7b]">{formatCi(group.totalCi)}%</span>
+                              <span className="text-xs text-ink-faint">{formatCi(group.totalCi)}%</span>
                             </div>
                             {collapsed ? null : (
                               <div className="flex flex-col gap-1.5">
                                 {group.units.length === 0 ? (
-                                  <p className="text-sm italic text-[#9a8a7b]">No units.</p>
+                                  <p className="text-sm italic text-ink-faint">No units.</p>
                                 ) : (
                                   group.units.map((unit) => (
                                     <div key={unit.id} className="flex items-center gap-3">
-                                      <span className="w-20 shrink-0 text-sm font-medium text-[#1d1b18]">{unit.label || "—"}</span>
-                                      <span className="w-24 shrink-0 text-sm text-[#5b5148]">{formatCi(unit.commonInterest)}%</span>
+                                      <span className="w-20 shrink-0 text-sm font-medium text-foreground">{unit.label || "—"}</span>
+                                      <span className="w-24 shrink-0 text-sm text-ink-muted">{formatCi(unit.commonInterest)}%</span>
                                       {readOnly ? null : (
                                         <button
                                           type="button"
                                           aria-label={`Remove unit ${unit.label} from owner`}
-                                          className="flex h-6 w-6 items-center justify-center rounded-full border border-[#f0c8c6] text-[#c0443c] transition hover:border-[#e9a8a4]"
+                                          className="flex h-6 w-6 items-center justify-center rounded-full border border-danger-line text-danger transition hover:border-danger-line-strong"
                                           onClick={() =>
                                             patch((draft) => ({
                                               ...draft,
@@ -1419,7 +1419,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                 )}
                                 {!readOnly && unassignedUnits.length > 0 ? (
                                   <div className="mt-1 flex items-center gap-2">
-                                    <span className="text-xs text-[#9a8a7b]">Add unit:</span>
+                                    <span className="text-xs text-ink-faint">Add unit:</span>
                                     <select
                                       className={`${field} max-w-xs`}
                                       value=""
@@ -1466,9 +1466,9 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                   className={`${sectionTitle} flex items-center gap-2`}
                   onClick={() => setCollapsedExpenses((value) => !value)}
                 >
-                  <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedExpenses ? "▸" : "▾"}</span>
+                  <span className="text-2xl leading-none text-ink-subtle">{collapsedExpenses ? "▸" : "▾"}</span>
                   Expenses
-                  <span className="text-sm font-normal text-[#9a8a7b]">({budget.expenses.length})</span>
+                  <span className="text-sm font-normal text-ink-faint">({budget.expenses.length})</span>
                 </button>
                 {!collapsedExpenses && expenseCategories.length > 0 ? (
                   <button type="button" className={pillButton} onClick={toggleAllCategories}>
@@ -1525,7 +1525,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                     }
                                   }}
                                   onDragEnd={() => setDragCategory(null)}
-                                  className="cursor-grab select-none text-[#b3a392]"
+                                  className="cursor-grab select-none text-ink-faint"
                                   title={`Drag to reorder category ${category}`}
                                 >
                                   ☰
@@ -1537,15 +1537,15 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                 aria-label={catCollapsed ? `Expand ${category}` : `Collapse ${category}`}
                                 onClick={() => toggleType(catKey(category))}
                               >
-                                <span className="text-lg leading-none text-[#8c7b6c]">{catCollapsed ? "▸" : "▾"}</span>
+                                <span className="text-lg leading-none text-ink-subtle">{catCollapsed ? "▸" : "▾"}</span>
                               </button>
                               {readOnly ? (
-                                <span className="text-sm font-semibold text-[#1d1b18]">{category}</span>
+                                <span className="text-sm font-semibold text-foreground">{category}</span>
                               ) : (
                                 <CategoryName category={category} onRename={renameCategory} />
                               )}
                               {catCollapsed && items.length > 0 ? (
-                                <span className="text-xs text-[#9a8a7b]">
+                                <span className="text-xs text-ink-faint">
                                   {items.length} item{items.length !== 1 ? "s" : ""} &middot; {formatCurrency(categoryTotal)}/yr
                                 </span>
                               ) : null}
@@ -1553,14 +1553,14 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                             <div className="flex items-center gap-2">
                               {!catCollapsed && items.length > 1 ? <span className={groupHeading}>Sort by</span> : null}
                               {!catCollapsed && items.length > 1 ? (
-                                <div className="flex overflow-hidden rounded-full border border-[#d8c7b5] text-xs font-semibold">
+                                <div className="flex overflow-hidden rounded-full border border-line-strong text-xs font-semibold">
                                   {(["name", "amount"] as ExpenseSortKey[]).map((key) => {
                                     const active = sort?.key === key;
                                     return (
                                       <button
                                         key={key}
                                         type="button"
-                                        className={`px-2.5 py-1 ${active ? "bg-[#1b1a17] text-white" : "text-[#5b5148]"}`}
+                                        className={`px-2.5 py-1 ${active ? "bg-primary text-on-primary" : "text-ink-muted"}`}
                                         aria-label={`Sort ${category} by ${EXPENSE_SORT_LABELS[key].toLowerCase()}${active ? ` (${sort.dir === "asc" ? "ascending" : "descending"})` : ""}`}
                                         onClick={() => cycleExpenseSort(category, key)}
                                       >
@@ -1574,7 +1574,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                               {readOnly ? null : (
                                 <button
                                   type="button"
-                                  className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                  className={`${iconButton} border-danger-line text-danger hover:border-danger-line-strong`}
                                   aria-label={`Remove category ${category}`}
                                   onClick={() =>
                                     patch((draft) => ({
@@ -1620,7 +1620,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                     {readOnly ? null : (
                                       <button
                                         type="button"
-                                        className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                        className={`${iconButton} border-danger-line text-danger hover:border-danger-line-strong`}
                                         aria-label="Remove expense"
                                         onClick={() =>
                                           patch((draft) => ({ ...draft, expenses: draft.expenses.filter((e) => e.id !== expense.id) }))
@@ -1652,7 +1652,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                         }
                       />
                     )}
-                    <div className="mt-2 flex items-center justify-between border-t border-[#eadccb] pt-3 text-sm font-semibold text-[#181716]">
+                    <div className="mt-2 flex items-center justify-between border-t border-line pt-3 text-sm font-semibold text-foreground">
                       <span>Total expenses</span>
                       <span>{formatCurrency(budget.expenses.reduce((sum, expense) => sum + expense.amount, 0))}/yr</span>
                     </div>
@@ -1669,9 +1669,9 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                   className={`${sectionTitle} flex items-center gap-2`}
                   onClick={() => setCollapsedPolicies((value) => !value)}
                 >
-                  <span className="text-2xl leading-none text-[#8c7b6c]">{collapsedPolicies ? "▸" : "▾"}</span>
+                  <span className="text-2xl leading-none text-ink-subtle">{collapsedPolicies ? "▸" : "▾"}</span>
                   Policies
-                  <span className="text-sm font-normal text-[#9a8a7b]">({budget.policies.length})</span>
+                  <span className="text-sm font-normal text-ink-faint">({budget.policies.length})</span>
                 </button>
                 <div className="flex flex-wrap items-center gap-2">
                   {readOnly ? null : (
@@ -1723,7 +1723,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                         <div
                           key={policy.id}
                           data-policy={policy.id}
-                          className={`rounded-2xl border border-[#f2e8dd] bg-[#fffaf3] p-4 transition-opacity ${dragPolicy === policy.id ? "opacity-40" : ""}`}
+                          className={`rounded-2xl border border-line-soft bg-surface-soft p-4 transition-opacity ${dragPolicy === policy.id ? "opacity-40" : ""}`}
                           onDragOver={(event) => {
                             if (dragPolicy) {
                               event.preventDefault();
@@ -1751,7 +1751,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                     }
                                   }}
                                   onDragEnd={() => setDragPolicy(null)}
-                                  className="cursor-grab select-none text-[#b3a392]"
+                                  className="cursor-grab select-none text-ink-faint"
                                   title="Drag to reorder policy"
                                 >
                                   ☰
@@ -1772,16 +1772,14 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                             </div>
                             <div className="flex items-center gap-3">
                               <span
-                                className={
-                                  Math.abs(weightSum - 100) <= 0.01 ? "text-xs text-[#3f7a52]" : "text-xs font-semibold text-[#b44b43]"
-                                }
+                                className={Math.abs(weightSum - 100) <= 0.01 ? "text-xs text-success" : "text-xs font-semibold text-danger"}
                               >
                                 total: {weightSum}%
                               </span>
                               {readOnly ? null : (
                                 <button
                                   type="button"
-                                  className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                  className={`${iconButton} border-danger-line text-danger hover:border-danger-line-strong`}
                                   aria-label="Remove policy"
                                   onClick={() =>
                                     patch((draft) => ({ ...draft, policies: draft.policies.filter((p) => p.id !== policy.id) }))
@@ -1810,13 +1808,13 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                             const editing = editingPolicyExpenses === policy.id;
                             const shown = editing ? budget.expenses : used;
                             return (
-                              <div className="mt-2 text-xs text-[#5b5148]">
+                              <div className="mt-2 text-xs text-ink-muted">
                                 <div className="flex items-center gap-2">
                                   <p>{used.length > 0 || editing ? "Used by:" : "Not used by any expense."}</p>
                                   {!readOnly && budget.expenses.length > 0 ? (
                                     <button
                                       type="button"
-                                      className="font-semibold text-[#1d1b18] underline"
+                                      className="font-semibold text-foreground underline"
                                       onClick={() => setEditingPolicyExpenses(editing ? null : policy.id)}
                                     >
                                       {editing ? "Done" : "Edit"}
@@ -1827,7 +1825,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                   <div className="mt-1 grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-x-4 gap-y-2">
                                     {groupByCategory(shown).map((group) => (
                                       <div key={group.category} className="min-w-0">
-                                        <p className="pb-0.5 font-semibold text-[#1d1b18]">{group.category || "—"}</p>
+                                        <p className="pb-0.5 font-semibold text-foreground">{group.category || "—"}</p>
                                         <ul className="flex flex-col gap-0.5">
                                           {group.items.map((e) =>
                                             editing ? (
@@ -1848,7 +1846,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                                   <span className="flex min-w-0 flex-col">
                                                     <span className="truncate">{e.name || "(unnamed)"}</span>
                                                     {e.policyId && e.policyId !== policy.id ? (
-                                                      <span className="truncate text-[#9a8a7b]">
+                                                      <span className="truncate text-ink-faint">
                                                         (now: {budget.policies.find((p) => p.id === e.policyId)?.name ?? "?"})
                                                       </span>
                                                     ) : null}
@@ -1876,7 +1874,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                 // biome-ignore lint/suspicious/noArrayIndexKey: rules are positional and have no stable id
                                 key={`${policy.id}-rule-${ruleIndex}`}
                                 data-rule
-                                className={`rounded-xl border border-[#eee0d1] bg-white/70 p-3 transition-opacity ${dragRule?.policyId === policy.id && dragRule.index === ruleIndex ? "opacity-40" : ""}`}
+                                className={`rounded-xl border border-line bg-surface/70 p-3 transition-opacity ${dragRule?.policyId === policy.id && dragRule.index === ruleIndex ? "opacity-40" : ""}`}
                                 onDragOver={(event) => {
                                   if (dragRule?.policyId === policy.id) {
                                     event.preventDefault();
@@ -1909,13 +1907,13 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                             }
                                           }}
                                           onDragEnd={() => setDragRule(null)}
-                                          className="cursor-grab select-none text-[#b3a392]"
+                                          className="cursor-grab select-none text-ink-faint"
                                           title="Drag to reorder rule"
                                         >
                                           ☰
                                         </span>
                                       ) : null}
-                                      <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-[#4a4037]">
+                                      <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-ink-soft">
                                         %
                                         <PercentField
                                           className={`${fieldBase} w-16`}
@@ -1960,7 +1958,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                         ))}
                                       </select>
                                       {budget.unitTypes.map((type) => (
-                                        <label key={type.name} className="flex items-center gap-1 text-xs text-[#5b5148]">
+                                        <label key={type.name} className="flex items-center gap-1 text-xs text-ink-muted">
                                           <input
                                             type="checkbox"
                                             checked={rule.unitTypes.includes(type.name)}
@@ -1991,10 +1989,10 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                         </label>
                                       ))}
                                       {rule.unitTypes.length === 0 ? (
-                                        <span className="text-xs italic text-[#b44b43]">select unit types</span>
+                                        <span className="text-xs italic text-danger">select unit types</span>
                                       ) : null}
                                       {[...new Set([...allTags, ...rule.tags])].map((tag) => (
-                                        <label key={tag} className="flex items-center gap-1 text-xs text-[#5b5148]">
+                                        <label key={tag} className="flex items-center gap-1 text-xs text-ink-muted">
                                           <input
                                             type="checkbox"
                                             checked={rule.tags.includes(tag)}
@@ -2021,7 +2019,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                               }))
                                             }
                                           />
-                                          <span className="rounded-full border border-[#e6d7c7] bg-white px-1.5">#{tag}</span>
+                                          <span className="rounded-full border border-line bg-surface px-1.5">#{tag}</span>
                                         </label>
                                       ))}
                                     </div>
@@ -2029,7 +2027,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                   {!readOnly && policy.rules.length > 1 ? (
                                     <button
                                       type="button"
-                                      className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                                      className={`${iconButton} border-danger-line text-danger hover:border-danger-line-strong`}
                                       aria-label="Remove rule"
                                       onClick={() =>
                                         patch((draft) => ({
@@ -2082,7 +2080,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
               </p>
               <Locked locked={readOnly}>
                 <div className="mt-4 flex flex-wrap gap-6">
-                  <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
+                  <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-ink-soft">
                     Inflation %
                     <PercentField
                       className={`${fieldBase} w-28`}
@@ -2090,7 +2088,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                       onChange={(next) => patch((draft) => ({ ...draft, adjustments: { ...draft.adjustments, inflationPct: next } }))}
                     />
                   </span>
-                  <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
+                  <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-ink-soft">
                     Reserve %
                     <PercentField
                       className={`${fieldBase} w-28`}
@@ -2156,7 +2154,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                         {readOnly ? null : (
                           <button
                             type="button"
-                            className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                            className={`${iconButton} border-danger-line text-danger hover:border-danger-line-strong`}
                             aria-label="Remove income"
                             onClick={() =>
                               patch((draft) => ({
@@ -2223,7 +2221,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                           </option>
                         ))}
                       </select>
-                      <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-[#4a4037]">
+                      <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-ink-soft">
                         offset %{/* The slider snaps to 10% steps; the number field accepts any percent. */}
                         <input
                           type="range"
@@ -2231,7 +2229,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                           max={100}
                           step={10}
                           aria-label="Offset percent"
-                          className="w-40 accent-[#1b1a17]"
+                          className="w-40 accent-primary"
                           value={Math.max(-100, Math.min(100, offset.pct))}
                           onChange={(event) => setOffsetPct(offsetIndex, Number(event.target.value))}
                         />
@@ -2244,7 +2242,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                       {readOnly ? null : (
                         <button
                           type="button"
-                          className={`${iconButton} border-[#f0c8c6] text-[#c0443c] hover:border-[#e9a8a4]`}
+                          className={`${iconButton} border-danger-line text-danger hover:border-danger-line-strong`}
                           aria-label="Remove offset"
                           onClick={() =>
                             patch((draft) => ({
@@ -2281,7 +2279,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                   ) : null}
                   <button
                     type="button"
-                    className={`${iconButton} ${showBreakdown ? "bg-[#1b1a17] text-white" : ""}`}
+                    className={`${iconButton} ${showBreakdown ? "bg-primary text-on-primary" : ""}`}
                     aria-label={showBreakdown ? "Hide breakdown" : "Show breakdown"}
                     title={showBreakdown ? "Hide breakdown" : "Show breakdown"}
                     onClick={() => setShowBreakdown((value) => !value)}
@@ -2301,11 +2299,11 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                   : ""}
                 {result.totals.reserve > 0.01 ? ` + reserve ${formatCurrency(result.totals.reserve)}` : ""}).{" "}
                 {result.unallocated > 0.01 ? (
-                  <span className="font-semibold text-[#b44b43]">{formatCurrency(result.unallocated)} unallocated.</span>
+                  <span className="font-semibold text-danger">{formatCurrency(result.unallocated)} unallocated.</span>
                 ) : null}
               </p>
               <p
-                className={`mt-3 rounded-xl border px-3 py-2 text-sm ${reconciliation.matches ? "border-[#cfe3d3] bg-[#f1f8f2] text-[#3f7a52]" : "border-[#f0c8c6] bg-[#fdf1f0] text-[#b44b43]"}`}
+                className={`mt-3 rounded-xl border px-3 py-2 text-sm ${reconciliation.matches ? "border-success-line bg-success-soft text-success" : "border-danger-line bg-danger-soft text-danger"}`}
               >
                 {reconciliation.matches ? "✓" : "✗"} Monthly charges × 12 = {formatCurrency(reconciliation.collected)}/yr
                 {reconciliation.matches
@@ -2316,7 +2314,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                 {sortedPerOwner.map((owner) => {
                   const chargesCollapsed = collapsedCharges.has(owner.ownerId);
                   return (
-                    <div key={owner.ownerId} className="rounded-2xl border border-[#f2e8dd] bg-[#fffaf3] p-4">
+                    <div key={owner.ownerId} className="rounded-2xl border border-line-soft bg-surface-soft p-4">
                       <div className="flex items-center justify-between gap-3">
                         <button
                           type="button"
@@ -2333,19 +2331,19 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                             })
                           }
                         >
-                          <span className="text-lg leading-none text-[#8c7b6c]">{chargesCollapsed ? "▸" : "▾"}</span>
-                          <span className={`font-semibold ${owner.isBoard ? "text-[#a89a8b]" : "text-[#181716]"}`}>
+                          <span className="text-lg leading-none text-ink-subtle">{chargesCollapsed ? "▸" : "▾"}</span>
+                          <span className={`font-semibold ${owner.isBoard ? "text-ink-faint" : "text-foreground"}`}>
                             {owner.name}
                             {owner.isBoard ? <span className="ml-2 text-xs italic">board</span> : null}
                           </span>
                         </button>
-                        <span className={`whitespace-nowrap font-semibold ${owner.isBoard ? "text-[#a89a8b]" : "text-[#181716]"}`}>
+                        <span className={`whitespace-nowrap font-semibold ${owner.isBoard ? "text-ink-faint" : "text-foreground"}`}>
                           {formatCurrency(owner.monthly)}/mo
                           {chargesCollapsed && !owner.isBoard
                             ? (() => {
                                 const delta = owner.monthly - owner.currentMonthly;
                                 const up = delta >= 0;
-                                const color = Math.abs(delta) < 0.01 ? "text-[#5b5148]" : up ? "text-[#5f5852]" : "text-[#3f7a52]";
+                                const color = Math.abs(delta) < 0.01 ? "text-ink-muted" : up ? "text-ink-soft" : "text-success";
                                 return (
                                   <span className={`ml-2 text-sm ${color}`}>
                                     ({up ? "+" : "-"}
@@ -2363,9 +2361,9 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                             : (() => {
                                 const delta = owner.monthly - owner.currentMonthly;
                                 const up = delta >= 0;
-                                const color = Math.abs(delta) < 0.01 ? "text-[#5b5148]" : up ? "text-[#5f5852]" : "text-[#3f7a52]";
+                                const color = Math.abs(delta) < 0.01 ? "text-ink-muted" : up ? "text-ink-soft" : "text-success";
                                 return (
-                                  <div className="mt-1 text-sm text-[#5b5148]">
+                                  <div className="mt-1 text-sm text-ink-muted">
                                     current <span className="whitespace-nowrap">{formatCurrency(owner.currentMonthly)}/mo</span> &rarr;{" "}
                                     <span className="whitespace-nowrap">new {formatCurrency(owner.monthly)}/mo</span>
                                     <br />
@@ -2384,9 +2382,9 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                             <div className="flex flex-col gap-1">
                               <p className={groupHeading}>Per unit</p>
                               {(unitsByOwner.get(owner.ownerId) ?? []).map((unit) => (
-                                <div key={unit.unitId} className="flex items-center justify-between text-sm text-[#4a4037]">
+                                <div key={unit.unitId} className="flex items-center justify-between text-sm text-ink-soft">
                                   <span>
-                                    {unit.label} <span className="text-xs text-[#9a8a7b]">({unit.type})</span>
+                                    {unit.label} <span className="text-xs text-ink-faint">({unit.type})</span>
                                   </span>
                                   <span>{formatCurrency(unit.monthly)}/mo</span>
                                 </div>
@@ -2398,7 +2396,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                 {(() => {
                                   const units = unitsByOwner.get(owner.ownerId) ?? [];
                                   if (units.length === 0) {
-                                    return <p className="text-sm italic text-[#9a8a7b]">No units.</p>;
+                                    return <p className="text-sm italic text-ink-faint">No units.</p>;
                                   }
                                   const rows = budget.expenses.filter((expense) =>
                                     units.some((u) => Math.abs(u.byExpense[expense.id] ?? 0) > 0.005),
@@ -2411,7 +2409,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                     <div className="overflow-x-auto">
                                       <table className="w-full border-collapse text-xs">
                                         <thead>
-                                          <tr className="text-left text-[#8c7b6c]">
+                                          <tr className="text-left text-ink-subtle">
                                             <th className="py-1 pr-3 font-semibold" />
                                             {units.map((u) => (
                                               <th key={u.unitId} className="py-1 pl-3 text-right font-semibold">
@@ -2420,7 +2418,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                             ))}
                                           </tr>
                                         </thead>
-                                        <tbody className="text-[#4a4037]">
+                                        <tbody className="text-ink-soft">
                                           {rows.length > 0 ? (
                                             <tr>
                                               <td colSpan={units.length + 1} className={`${breakdownSubheading} pt-2`}>
@@ -2430,13 +2428,13 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                           ) : null}
                                           {groupByCategory(rows).map((group) => (
                                             <Fragment key={group.category}>
-                                              <tr className="border-t border-[#f2e8dd]">
-                                                <td colSpan={units.length + 1} className="pt-2 pb-1 pr-3 font-semibold text-[#1d1b18]">
+                                              <tr className="border-t border-line-soft">
+                                                <td colSpan={units.length + 1} className="pt-2 pb-1 pr-3 font-semibold text-foreground">
                                                   {group.category || "—"}
                                                 </td>
                                               </tr>
                                               {group.items.map((expense) => (
-                                                <tr key={expense.id} className="border-t border-[#f2e8dd]">
+                                                <tr key={expense.id} className="border-t border-line-soft">
                                                   <td className="py-1 pr-3 pl-3">{expenseName.get(expense.id)}</td>
                                                   {units.map((u) => (
                                                     <td key={u.unitId} className="whitespace-nowrap py-1 pl-3 text-right">
@@ -2455,7 +2453,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                             </tr>
                                           ) : null}
                                           {showBoard ? (
-                                            <tr className="border-t border-[#f2e8dd]">
+                                            <tr className="border-t border-line-soft">
                                               <td className="py-1 pr-3">Board units</td>
                                               {units.map((u) => (
                                                 <td key={u.unitId} className="whitespace-nowrap py-1 pl-3 text-right">
@@ -2465,7 +2463,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                             </tr>
                                           ) : null}
                                           {showOffset ? (
-                                            <tr className="border-t border-[#f2e8dd]">
+                                            <tr className="border-t border-line-soft">
                                               <td className="py-1 pr-3">Offset</td>
                                               {units.map((u) => (
                                                 <td key={u.unitId} className="whitespace-nowrap py-1 pl-3 text-right">
@@ -2475,7 +2473,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                             </tr>
                                           ) : null}
                                           {showIncome ? (
-                                            <tr className="border-t border-[#f2e8dd]">
+                                            <tr className="border-t border-line-soft">
                                               <td className="py-1 pr-3">Income</td>
                                               {units.map((u) => (
                                                 <td key={u.unitId} className="whitespace-nowrap py-1 pl-3 text-right">
@@ -2485,7 +2483,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                             </tr>
                                           ) : null}
                                           {showReserve ? (
-                                            <tr className="border-t border-[#f2e8dd]">
+                                            <tr className="border-t border-line-soft">
                                               <td className="py-1 pr-3">Reserve</td>
                                               {units.map((u) => (
                                                 <td key={u.unitId} className="whitespace-nowrap py-1 pl-3 text-right">
@@ -2494,7 +2492,7 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                                               ))}
                                             </tr>
                                           ) : null}
-                                          <tr className="border-t border-[#eadccb] font-semibold text-[#181716]">
+                                          <tr className="border-t border-line font-semibold text-foreground">
                                             <td className="py-1 pr-3">Total</td>
                                             {units.map((u) => (
                                               <td key={u.unitId} className="whitespace-nowrap py-1 pl-3 text-right">
@@ -2618,10 +2616,10 @@ function BatchModal({
         role="dialog"
         aria-modal="true"
         aria-label={`Batch add ${noun}`}
-        className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-[#e7d7c8] bg-[#fbf6ef] p-6 shadow-2xl"
+        className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-line bg-surface-soft p-6 shadow-2xl"
       >
-        <h3 className="text-xl font-semibold text-[#181716]">Batch add {noun}</h3>
-        <p className="mt-1 text-sm text-[#5b5148]">
+        <h3 className="text-xl font-semibold text-foreground">Batch add {noun}</h3>
+        <p className="mt-1 text-sm text-ink-muted">
           {kind === "owner"
             ? "One owner per line: name, current monthly (comma or tab separated). The amount is optional and may have a $ prefix. The board owner is not set here; pick it afterwards."
             : kind === "unit"
@@ -2629,7 +2627,7 @@ function BatchModal({
               : "One unit type per line: name, classification (comma or tab separated). Classification is optional and defaults to Primary; use 'primary' or 'ancillary'."}
         </p>
         <textarea
-          className="mt-3 h-44 w-full rounded-xl border border-[#e6d7c7] bg-white px-3 py-2 font-mono text-sm text-[#1d1b18] outline-none focus:border-[#c9a888] focus:ring-2 focus:ring-[#edc9a6]/60"
+          className="mt-3 h-44 w-full rounded-xl border border-line bg-surface px-3 py-2 font-mono text-sm text-foreground outline-none focus:border-line-focus focus:ring-2 focus:ring-ring/60"
           value={text}
           placeholder={
             kind === "owner"
@@ -2641,18 +2639,18 @@ function BatchModal({
           onChange={(event) => setText(event.target.value)}
         />
 
-        <div className="mt-3 text-sm text-[#4a4037]">
+        <div className="mt-3 text-sm text-ink-soft">
           <p>
-            <span className="font-semibold text-[#3f7a52]">{parsedCount}</span> parsed
+            <span className="font-semibold text-success">{parsedCount}</span> parsed
             {kind !== "owner" ? (
               <>
-                , <span className={skipped.length > 0 ? "font-semibold text-[#b44b43]" : ""}>{skipped.length}</span> skipped
+                , <span className={skipped.length > 0 ? "font-semibold text-danger" : ""}>{skipped.length}</span> skipped
               </>
             ) : null}
             .
           </p>
           {skipped.length > 0 ? (
-            <ul className="mt-2 max-h-32 overflow-y-auto rounded-lg border border-[#eccfa3] bg-[#fff6e6] p-2 text-xs text-[#7a5a23]">
+            <ul className="mt-2 max-h-32 overflow-y-auto rounded-lg border border-warning-line bg-warning-soft p-2 text-xs text-warning">
               {skipped.map((entry) => (
                 <li key={`${entry.line}-${entry.reason}`}>
                   <span className="font-mono">{entry.line}</span> — {entry.reason}
@@ -2662,7 +2660,7 @@ function BatchModal({
           ) : null}
         </div>
 
-        <label className="mt-3 flex items-center gap-2 text-sm text-[#4a4037]">
+        <label className="mt-3 flex items-center gap-2 text-sm text-ink-soft">
           <input type="checkbox" checked={replaceAll} onChange={(event) => setReplaceAll(event.target.checked)} />
           Replace all existing {noun}
         </label>
@@ -2746,7 +2744,7 @@ function CurrencyField({
   };
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#8a7768]">$</span>
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-ink-subtle">$</span>
       <input
         className={`${className} pl-7`}
         type="text"
@@ -2906,17 +2904,17 @@ function TagInput({ tags, onChange }: { tags: string[]; onChange: (next: string[
   return (
     <label
       htmlFor={inputId}
-      className="relative flex min-h-10 w-full cursor-text flex-wrap items-center gap-1 rounded-xl border border-[#e6d7c7] bg-[#fefbf7] px-1.5 py-1 text-sm font-medium text-[#1d1b18] transition focus-within:border-[#c9a888] focus-within:ring-2 focus-within:ring-[#edc9a6]/60"
+      className="relative flex min-h-10 w-full cursor-text flex-wrap items-center gap-1 rounded-xl border border-line bg-surface-soft px-1.5 py-1 text-sm font-medium text-foreground transition focus-within:border-line-focus focus-within:ring-2 focus-within:ring-ring/60"
     >
       {tags.map((tag) => (
         <span
           key={tag}
-          className="inline-flex items-center gap-0.5 rounded-full border border-[#e6d7c7] bg-white py-0.5 pr-0.5 pl-2 text-xs text-[#5b5148]"
+          className="inline-flex items-center gap-0.5 rounded-full border border-line bg-surface py-0.5 pr-0.5 pl-2 text-xs text-ink-muted"
         >
           {tag}
           <button
             type="button"
-            className="flex h-4 w-4 items-center justify-center rounded-full text-[#8c7b6c] hover:bg-[#f1e7db] hover:text-[#1d1b18]"
+            className="flex h-4 w-4 items-center justify-center rounded-full text-ink-subtle hover:bg-muted hover:text-foreground"
             aria-label={`Remove tag ${tag}`}
             onClick={() => onChange(tags.filter((item) => item !== tag))}
           >

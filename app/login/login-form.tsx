@@ -85,7 +85,7 @@ export const LoginForm = ({ siteKey }: { siteKey: string }) => {
         </form>
       ) : (
         <form onSubmit={submitCode} className="flex flex-col gap-4">
-          <p className="text-sm text-[#5b5148]">We sent a code to {email}. Check your spam folder if you do not see it.</p>
+          <p className="text-sm text-ink-muted">We sent a code to {email}. Check your spam folder if you do not see it.</p>
           <label className="flex flex-col gap-1 text-sm">
             Code
             <input
@@ -103,7 +103,7 @@ export const LoginForm = ({ siteKey }: { siteKey: string }) => {
         </form>
       )}
       {error === null ? null : (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}

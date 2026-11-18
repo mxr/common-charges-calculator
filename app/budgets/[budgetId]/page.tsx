@@ -46,7 +46,7 @@ export default async function BudgetPage({ params }: { params: Promise<{ budgetI
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-6 px-6 py-16">
-      <nav className="flex gap-2 text-sm text-[#5b5148]">
+      <nav className="flex gap-2 text-sm text-ink-muted">
         <Link href="/buildings" className={LINK_CLASS}>
           Buildings
         </Link>
@@ -65,7 +65,7 @@ export default async function BudgetPage({ params }: { params: Promise<{ budgetI
         </div>
       )}
       {editor === null ? (
-        <p className="text-sm text-[#5b5148]">You can view published versions of this budget.</p>
+        <p className="text-sm text-ink-muted">You can view published versions of this budget.</p>
       ) : (
         <PendingSave budgetId={budgetId} />
       )}
@@ -82,7 +82,7 @@ export default async function BudgetPage({ params }: { params: Promise<{ budgetI
         <>
           <h2 className="text-lg font-semibold">Drafts</h2>
           {drafts.length === 0 ? (
-            <p className="text-sm text-[#5b5148]">No drafts.</p>
+            <p className="text-sm text-ink-muted">No drafts.</p>
           ) : (
             <ul className="flex flex-col gap-2 text-sm">
               {drafts.map((draft) => (
@@ -90,7 +90,7 @@ export default async function BudgetPage({ params }: { params: Promise<{ budgetI
                   <Link href={`/budgets/${budgetId}/drafts/${draft.id}`} className={LINK_CLASS}>
                     {draft.name}
                   </Link>
-                  <span className="text-[#5b5148]">
+                  <span className="text-ink-muted">
                     {draft.authorId === user.id ? "Yours" : `By ${draft.author ?? "a deleted account"}`},{" "}
                     {draft.baseVersion === 0 ? "not from a version" : `from version ${draft.baseVersion}`}, saved{" "}
                     {formatDate(draft.updatedAt)} UTC
@@ -139,12 +139,12 @@ export default async function BudgetPage({ params }: { params: Promise<{ budgetI
       {members === null || invites === null ? null : (
         <>
           <h2 className="text-lg font-semibold">Members</h2>
-          <p className="text-sm text-[#5b5148]">
+          <p className="text-sm text-ink-muted">
             Viewers see published versions. Editors also see drafts, write their own, and publish them. You manage the building, so you can
             do everything.
           </p>
           {members.length === 0 ? (
-            <p className="text-sm text-[#5b5148]">Nobody else has access.</p>
+            <p className="text-sm text-ink-muted">Nobody else has access.</p>
           ) : (
             <ul className="flex flex-col gap-2 text-sm">
               {members.map((member) => (
@@ -160,7 +160,7 @@ export default async function BudgetPage({ params }: { params: Promise<{ budgetI
                     </button>
                   </form>
                   <form action={removeMemberAction.bind(null, budgetId, member.userId)}>
-                    <button type="submit" className="text-red-700 underline">
+                    <button type="submit" className="text-danger underline">
                       Remove
                     </button>
                   </form>
@@ -172,11 +172,11 @@ export default async function BudgetPage({ params }: { params: Promise<{ budgetI
             <ul className="flex flex-col gap-2 text-sm">
               {invites.map((invite) => (
                 <li key={invite.id} className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <span className="flex-1 text-[#5b5148]">
+                  <span className="flex-1 text-ink-muted">
                     Unused {invite.role} link, expires {formatDate(invite.expiresAt)} UTC
                   </span>
                   <form action={revokeInviteAction.bind(null, budgetId, invite.id)}>
-                    <button type="submit" className="text-red-700 underline">
+                    <button type="submit" className="text-danger underline">
                       Revoke
                     </button>
                   </form>
@@ -189,16 +189,16 @@ export default async function BudgetPage({ params }: { params: Promise<{ budgetI
       )}
       <h2 className="text-lg font-semibold">Changelog</h2>
       {changelog.length === 0 ? (
-        <p className="text-sm text-[#5b5148]">No versions yet.</p>
+        <p className="text-sm text-ink-muted">No versions yet.</p>
       ) : (
         <ol className="flex flex-col gap-4 text-sm">
           {changelog.map((version) => (
-            <li key={version.number} className="flex flex-col gap-1 rounded-2xl border border-[#e7d7c8] bg-white p-4">
+            <li key={version.number} className="flex flex-col gap-1 rounded-2xl border border-line bg-surface p-4">
               <p>
                 <Link href={`/budgets/${budgetId}/versions/${version.number}`} className={`${LINK_CLASS} font-semibold`}>
                   Version {version.number}
                 </Link>
-                <span className="text-[#5b5148]">
+                <span className="text-ink-muted">
                   {" "}
                   published by {version.publishedBy ?? "a deleted account"} on {formatDate(version.publishedAt)} UTC
                   {version.basedOn === version.number - 1
@@ -210,7 +210,7 @@ export default async function BudgetPage({ params }: { params: Promise<{ budgetI
               </p>
               {version.note === "" ? null : <p className="whitespace-pre-wrap">{version.note}</p>}
               {version.changes === null ? (
-                <p className="text-[#5b5148]">First version.</p>
+                <p className="text-ink-muted">First version.</p>
               ) : (
                 <details>
                   <summary className="cursor-pointer">Changes from version {version.number - 1}</summary>

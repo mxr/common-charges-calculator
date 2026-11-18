@@ -28,13 +28,13 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${spaceGrotesk.variable} ${plexMono.variable} antialiased`}>
         {children}
-        <footer className="border-t border-white/60 bg-white/40 px-6 py-4 text-xs text-[#5b5148] sm:px-10">
+        <footer className="border-t border-surface/60 bg-surface/40 px-6 py-4 text-xs text-ink-muted sm:px-10">
           <div className="mx-auto flex max-w-6xl flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <span>Version {packageJson.version}</span>
             <span>Licensed under GNU Affero General Public License v3.0</span>
             <a
               href="https://github.com/mxr/common-charges-calculator"
-              className="flex items-center gap-0.5 underline hover:text-[#3b3130]"
+              className="flex items-center gap-0.5 underline hover:text-ink-soft"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="GitHub repository (opens in new tab)"
