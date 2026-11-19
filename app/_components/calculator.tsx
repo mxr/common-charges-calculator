@@ -1544,9 +1544,10 @@ export function Calculator({ initialBudget, onBudgetChange, readOnly = false, in
                               ) : (
                                 <CategoryName category={category} onRename={renameCategory} />
                               )}
-                              {catCollapsed && items.length > 0 ? (
-                                <span className="text-xs text-ink-faint">
-                                  {items.length} item{items.length !== 1 ? "s" : ""} &middot; {formatCurrency(categoryTotal)}/yr
+                              {items.length > 0 ? (
+                                <span className="text-sm font-medium text-ink-subtle">
+                                  {catCollapsed ? `${items.length} item${items.length !== 1 ? "s" : ""} · ` : null}
+                                  {formatCurrency(categoryTotal)}/yr
                                 </span>
                               ) : null}
                             </div>
