@@ -1,71 +1,44 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: light;
-  --background: #f7f1e8;
-  --foreground: #1a1b1f;
-  --surface: #ffffff;
-  --surface-soft: #fefaf4;
-  --muted: #f1e7db;
-  --primary: #1b1a17;
-  --primary-hover: #2d2a25;
-  --on-primary: #ffffff;
-  --ink-soft: #4a4037;
-  --ink-muted: #5b5148;
-  --ink-subtle: #8c7b6c;
-  --ink-faint: #9a8a7b;
-  --line: #e7d7c8;
-  --line-soft: #f2e8dd;
-  --line-strong: #d8c7b5;
-  --line-focus: #c9a888;
-  --ring: #edc9a6;
-  --danger: #c0443c;
-  --danger-soft: #fdf1f0;
-  --danger-line: #f0c8c6;
-  --danger-line-strong: #e9a8a4;
-  --success: #3f7a52;
-  --success-soft: #f1f8f2;
-  --success-line: #cfe3d3;
-  --warning: #7a5a23;
-  --warning-soft: #fff6e6;
-  --warning-line: #eccfa3;
-  --glow-warm: #f0c9a7;
-  --glow-cool: #b6d6cf;
+  color-scheme: light dark;
+  --background: light-dark(#f7f1e8, #111113);
+  --foreground: light-dark(#1a1b1f, #ededef);
+  --surface: light-dark(#ffffff, #19191c);
+  --surface-soft: light-dark(#fefaf4, #1f1f23);
+  --muted: light-dark(#f1e7db, #2a2a2f);
+  --primary: light-dark(#1b1a17, #ededef);
+  --primary-hover: light-dark(#2d2a25, #d4d4d8);
+  --on-primary: light-dark(#ffffff, #111113);
+  --ink-soft: light-dark(#4a4037, #d4d4d8);
+  --ink-muted: light-dark(#5b5148, #a8a8b0);
+  --ink-subtle: light-dark(#8c7b6c, #8b8b94);
+  --ink-faint: light-dark(#9a8a7b, #6f6f78);
+  --line: light-dark(#e7d7c8, #2e2e34);
+  --line-soft: light-dark(#f2e8dd, #27272c);
+  --line-strong: light-dark(#d8c7b5, #3d3d44);
+  --line-focus: light-dark(#c9a888, #6b6b75);
+  --ring: light-dark(#edc9a6, #52525b);
+  --danger: light-dark(#c0443c, #f2867c);
+  --danger-soft: light-dark(#fdf1f0, #2a1616);
+  --danger-line: light-dark(#f0c8c6, #5a2a27);
+  --danger-line-strong: light-dark(#e9a8a4, #7a3a35);
+  --success: light-dark(#3f7a52, #7ccb96);
+  --success-soft: light-dark(#f1f8f2, #112019);
+  --success-line: light-dark(#cfe3d3, #24402e);
+  --warning: light-dark(#7a5a23, #e8c47f);
+  --warning-soft: light-dark(#fff6e6, #241e12);
+  --warning-line: light-dark(#eccfa3, #55431f);
+  --glow-warm: light-dark(#f0c9a7, #3b2a1c);
+  --glow-cool: light-dark(#b6d6cf, #14302c);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --background: #14120f;
-    --foreground: #f2ebe2;
-    --surface: #1e1b17;
-    --surface-soft: #24201b;
-    --muted: #2e2923;
-    --primary: #f2ebe2;
-    --primary-hover: #d9cfc3;
-    --on-primary: #14120f;
-    --ink-soft: #d8ccbf;
-    --ink-muted: #bcae9f;
-    --ink-subtle: #9c8d7e;
-    --ink-faint: #807366;
-    --line: #3a332c;
-    --line-soft: #2f2a24;
-    --line-strong: #4b4239;
-    --line-focus: #8f7660;
-    --ring: #8a6a4a;
-    --danger: #f08a80;
-    --danger-soft: #2b1816;
-    --danger-line: #5c2d29;
-    --danger-line-strong: #7d3d37;
-    --success: #82c79a;
-    --success-soft: #142219;
-    --success-line: #26432f;
-    --warning: #e6c58a;
-    --warning-soft: #271e10;
-    --warning-line: #5c4624;
-    --glow-warm: #5a3c22;
-    --glow-cool: #1d3d38;
-  }
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 @theme inline {

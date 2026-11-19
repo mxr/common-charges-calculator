@@ -1,5 +1,6 @@
 import { IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
 import packageJson from "../package.json";
+import { THEME_INIT_SCRIPT, ThemeToggle } from "./_components/theme-toggle";
 import type { Metadata } from "next";
 import "./globals.css";
 
@@ -25,12 +26,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static theme init script, no user input */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className={`${spaceGrotesk.variable} ${plexMono.variable} antialiased`}>
         {children}
         <footer className="border-t border-surface/60 bg-surface/40 px-6 py-4 text-xs text-ink-muted sm:px-10">
           <div className="mx-auto flex max-w-6xl flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <span>Version {packageJson.version}</span>
+            <ThemeToggle />
             <span>Licensed under GNU Affero General Public License v3.0</span>
             <a
               href="https://github.com/mxr/common-charges-calculator"
