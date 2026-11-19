@@ -75,7 +75,7 @@ export const PublishButton = ({ budgetId, draftId, revision, beforePublish }: Pu
 
   return (
     <form
-      className="flex w-full flex-col gap-3 rounded-2xl border border-[#e7d7c8] bg-white p-4 text-sm"
+      className="flex w-full flex-col gap-3 rounded-2xl border border-line bg-surface p-4 text-sm"
       onSubmit={(event) => {
         event.preventDefault();
         void publish();
@@ -93,7 +93,7 @@ export const PublishButton = ({ budgetId, draftId, revision, beforePublish }: Pu
         />
       </label>
       {behind === null ? null : (
-        <div role="alert" className="flex flex-col gap-2 rounded-xl border border-[#eccfa3] bg-[#fff6e6] p-3 text-[#7a5a23]">
+        <div role="alert" className="flex flex-col gap-2 rounded-xl border border-warning-line bg-warning-soft p-3 text-warning">
           <p>
             Version {behind.latest} was published after this draft started. Publishing replaces it with this draft. Changes from version{" "}
             {behind.latest}:

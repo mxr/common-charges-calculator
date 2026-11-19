@@ -37,7 +37,7 @@ export const CreateInvite = ({ budgetId }: { budgetId: string }) => {
       </form>
       {error ? <p role="alert">The link could not be created. Try again.</p> : null}
       {link === null ? null : (
-        <div className="flex flex-col gap-1 rounded-xl border border-[#eccfa3] bg-[#fff6e6] p-3 text-[#7a5a23]">
+        <div className="flex flex-col gap-1 rounded-xl border border-warning-line bg-warning-soft p-3 text-warning">
           <p>Copy this link now. It is shown only once, works for one person, and expires in 7 days.</p>
           <input readOnly value={link} aria-label="Invite link" onFocus={(event) => event.target.select()} className={INPUT_CLASS} />
         </div>

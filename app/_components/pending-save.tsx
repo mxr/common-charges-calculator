@@ -37,7 +37,7 @@ export const PendingSave = ({ budgetId }: { budgetId?: string }) => {
   };
 
   return (
-    <section className="flex flex-col gap-3 rounded-2xl border border-[#eccfa3] bg-[#fff6e6] p-4 text-sm text-[#7a5a23]">
+    <section className="flex flex-col gap-3 rounded-2xl border border-warning-line bg-warning-soft p-4 text-sm text-warning">
       <p>
         {budgetId === undefined
           ? "You have a budget from the calculator to save. Open a budget, or create one, to save it as a draft."

@@ -9,7 +9,7 @@ const formatCharge = (value: number | null) => (value === null ? "none" : `${for
 // Lists what changed between two budgets, then how each unit's monthly charge moves.
 export const BudgetDiffView = ({ diff }: { diff: BudgetDiff }) => {
   if (isUnchanged(diff)) {
-    return <p className="text-sm text-[#5b5148]">No changes.</p>;
+    return <p className="text-sm text-ink-muted">No changes.</p>;
   }
   return (
     <div className="flex flex-col gap-4 text-sm">
@@ -22,7 +22,7 @@ export const BudgetDiffView = ({ diff }: { diff: BudgetDiff }) => {
               <li key={index}>
                 {CHANGE_TEXT[entry.change]} {entry.name}
                 {entry.change === "changed" ? (
-                  <ul className="pl-4 text-[#5b5148]">
+                  <ul className="pl-4 text-ink-muted">
                     {entry.fields.map(({ field, before, after }) => (
                       <li key={field}>
                         {field}: {before || "(empty)"} → {after || "(empty)"}

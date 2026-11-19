@@ -22,11 +22,11 @@ export default async function BuildingsPage() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-6 px-6 py-16">
       <h1 className="text-2xl font-semibold">Buildings</h1>
-      <p className="text-sm text-[#5b5148]">Logged in as {user.email}.</p>
+      <p className="text-sm text-ink-muted">Logged in as {user.email}.</p>
       <PendingInvite />
       <PendingSave />
       {buildings.length === 0 ? (
-        <p className="text-sm text-[#5b5148]">You have no buildings yet.</p>
+        <p className="text-sm text-ink-muted">You have no buildings yet.</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {buildings.map((building) => (
@@ -34,7 +34,7 @@ export default async function BuildingsPage() {
               <Link href={`/buildings/${building.id}`} className={LINK_CLASS}>
                 {building.name}
               </Link>
-              {building.isAdmin ? null : <span className="text-sm text-[#5b5148]"> (shared with you)</span>}
+              {building.isAdmin ? null : <span className="text-sm text-ink-muted"> (shared with you)</span>}
             </li>
           ))}
         </ul>

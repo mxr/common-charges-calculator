@@ -105,7 +105,7 @@ export const DraftEditor = ({ budgetId, draftId, revision: initialRevision, init
         intro={intro}
         actions={
           <>
-            <span role="status" className="text-sm text-[#5b5148]">
+            <span role="status" className="text-sm text-ink-muted">
               {STATUS_TEXT[status]}
             </span>
             <PublishButton budgetId={budgetId} draftId={draftId} revision={initialRevision} beforePublish={savedRevision} />

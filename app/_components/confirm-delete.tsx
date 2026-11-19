@@ -19,7 +19,7 @@ export const ConfirmDelete = ({ action, name, what, impact }: ConfirmDeleteProps
   const [typed, setTyped] = useState("");
   if (!open) {
     return (
-      <button type="button" className="text-sm text-red-700 underline" onClick={() => setOpen(true)}>
+      <button type="button" className="text-sm text-danger underline" onClick={() => setOpen(true)}>
         Delete {what}
       </button>
     );
@@ -30,7 +30,10 @@ export const ConfirmDelete = ({ action, name, what, impact }: ConfirmDeleteProps
     count(impact.drafts, "draft"),
   ];
   return (
-    <form action={action} className="flex w-full flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+    <form
+      action={action}
+      className="flex w-full flex-col gap-3 rounded-2xl border border-danger-line bg-danger-soft p-4 text-sm text-danger"
+    >
       <p>
         Deleting {name} also deletes {new Intl.ListFormat("en-US").format(removed)}. This cannot be undone.
       </p>
@@ -56,7 +59,7 @@ export const ConfirmDelete = ({ action, name, what, impact }: ConfirmDeleteProps
         <button
           type="submit"
           disabled={typed.trim() !== name}
-          className="rounded-xl bg-red-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="rounded-xl bg-danger px-4 py-2 text-sm font-medium text-on-primary disabled:opacity-50"
         >
           Delete for good
         </button>

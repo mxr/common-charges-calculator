@@ -28,7 +28,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
       <h1 className="text-2xl font-semibold">Budget invite</h1>
       {invite === null ? (
         <>
-          <p className="text-sm text-[#5b5148]">You were invited to a budget. Log in, or create an account, to accept.</p>
+          <p className="text-sm text-ink-muted">You were invited to a budget. Log in, or create an account, to accept.</p>
           <LogInToAccept token={token} />
         </>
       ) : invite.status === "valid" ? (

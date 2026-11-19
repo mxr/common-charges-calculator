@@ -18,7 +18,7 @@ function HomeContent() {
 
 export default function Home() {
   return (
-    <Suspense fallback={<div className="p-6 text-sm text-[#5b5148]">Loading…</div>}>
+    <Suspense fallback={<div className="p-6 text-sm text-ink-muted">Loading…</div>}>
       <HomeContent />
     </Suspense>
   );
