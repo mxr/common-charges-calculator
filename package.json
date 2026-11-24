@@ -10,7 +10,7 @@
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.14",
+    "@electric-sql/pglite": "^0.6.0",
     "@tailwindcss/postcss": "^4",
     "@tsconfig/strictest": "^2.0.8",
     "@types/node": "^26.0.0",
