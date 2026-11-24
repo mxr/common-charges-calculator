@@ -50,6 +50,11 @@
       }
     }
   },
+  "markdown": {
+    "formatter": {
+      "enabled": false
+    }
+  },
   "yaml": {
     "formatter": {
       "enabled": false
